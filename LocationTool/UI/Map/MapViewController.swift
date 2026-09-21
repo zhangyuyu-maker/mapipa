@@ -26,13 +26,35 @@ final class MapViewController: UIViewController {
     private let searchResults = SearchResultsViewController()
     private var routeModeButton: UIBarButtonItem?
 
-    // MARK: - 状态
+    // MARK: - 状态（真实位置 / 模拟位置 彻底分离）
     private var mode: MapMode = .single
-    private var selectedPoint: LocationPoint?       // 单点模式：地图选中的点
-    private var mockPoint: LocationPoint?           // 单点模式：已设为模拟位置的点
-    private var routePoints: [RoutePoint] = []      // 路线模式：路线点列表
+    /// 真实 GPS 位置（由 CLLocationManager 获取，模拟期间只保存不显示）
+    private var realLocation: CLLocation?
+    /// 当前模拟位置（模拟期间地图中心/人物 Icon/Marker 都跟随此坐标）
+    private var simulationLocation: CLLocation?
+    /// 途径点列表（单点模式：长按或"增加途径点"模式下点击地图添加）
+    private var waypoints: [LocationPoint] = []
+    /// 当前途径点索引
+    private var currentWaypointIndex: Int = 0
+    /// 当前模拟目标点
+    private var simulationTarget: LocationPoint?
+    /// 单点模式：用户长按选定的最终目标
+    private var mockPoint: LocationPoint?
+    /// 单点模式：用户选中的点（用于卡片显示）
+    private var selectedPoint: LocationPoint?
+    /// 路线模式：路线点列表
+    private var routePoints: [RoutePoint] = []
+    /// 是否处于"增加途径点"模式
+    private var isAddingWaypoint: Bool = false
+    /// 当前单点模拟构建的路线点（供 onRouteProgress 计算剩余路线）
+    private var currentSingleRoutePoints: [RoutePoint] = []
+
     private let realLocationManager = CLLocationManager()
-    private var currentRealLocation: CLLocation?
+
+    /// 是否处于模拟状态
+    private var isSimulating: Bool {
+        backend.status == .running || routeManager.status == .running
+    }
 
     init(mapService: MapService,
          geocoding: GeocodingService,
@@ -58,6 +80,7 @@ final class MapViewController: UIViewController {
         setupRealLocation()
         setupLongPressGesture()
         locationCard.updateStatus(backend.status)
+        locationCard.updateWaypointCount(waypoints.count)
         updateModeUI()
         updateRouteCardInfo()
     }
@@ -151,13 +174,11 @@ final class MapViewController: UIViewController {
         if let btn = routeModeButton?.customView as? UIButton {
             btn.tintColor = isRoute ? .systemBlue : .systemGray
         }
-        // 切换到单点模式时清除选中状态与地图标记
         if !isRoute {
             selectedPoint = nil
             mockPoint = nil
             mapService.removeMarker()
         } else {
-            // 切换到路线模式：保留已绘制的路线，清除单点 Marker
             mapService.removeMarker()
         }
     }
@@ -189,14 +210,18 @@ final class MapViewController: UIViewController {
         locationCard.onStartStop = { [weak self] in
             self?.toggleSingleSimulation()
         }
+        locationCard.onAddWaypoint = { [weak self] in
+            self?.toggleWaypointAdding()
+        }
+        locationCard.onRestoreRealLocation = { [weak self] in
+            self?.restoreRealLocation()
+        }
 
         // 路线模式回调
         routeCard.onSpeedChange = { [weak self] speed in
             self?.routeManager.updateSpeed(speed)
         }
-        routeCard.onLoopChange = { _ in
-            // 循环切换在下次启动路线时生效
-        }
+        routeCard.onLoopChange = { _ in }
         routeCard.onClear = { [weak self] in
             self?.clearRoute()
         }
@@ -217,33 +242,52 @@ final class MapViewController: UIViewController {
 
         backend.onStatusChange = { [weak self] status, _ in
             self?.locationCard.updateStatus(status)
+            if status == .stopped {
+                self?.onSimulationEnded()
+            }
         }
 
         routeManager.onStatusChange = { [weak self] status in
             self?.routeCard.updateStatus(status)
+            if status == .stopped {
+                self?.onSimulationEnded()
+            }
         }
         routeManager.onProgress = { [weak self] progress in
-            self?.routeCard.updateProgress(progress)
+            self?.onRouteProgress(progress)
         }
     }
 
-    // MARK: - 真实位置
+    // MARK: - 真实位置（realLocation）
 
     private func setupRealLocation() {
         realLocationManager.delegate = self
         // 使用最高精度，避免室内/缓存位置造成的偏差
         realLocationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
         realLocationManager.pausesLocationUpdatesAutomatically = false
+        realLocationManager.distanceFilter = kCLDistanceFilterNone
         realLocationManager.requestWhenInUseAuthorization()
     }
 
+    /// 右下角"我的位置"按钮
+    /// 非模拟状态：以最新真实 GPS 为准
+    /// 模拟状态：以 simulationLocation 为准（不获取真实 GPS）
     @objc private func showCurrentLocation() {
+        if isSimulating {
+            // 模拟中：地图中心跟随 simulationLocation
+            if let sim = simulationLocation {
+                mapService.showLocation(sim.coordinate,
+                                        latitudinalMeters: 200,
+                                        longitudinalMeters: 200)
+            }
+            return
+        }
         guard CLLocationManager.locationServicesEnabled() else {
             present(locationFailAlert("系统定位服务未开启"), animated: true)
             return
         }
         // 清空旧坐标，强制重新获取最新真实 GPS
-        currentRealLocation = nil
+        realLocation = nil
         mapService.removeMarker()
         realLocationManager.requestLocation()
     }
@@ -265,19 +309,29 @@ final class MapViewController: UIViewController {
     @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
         guard gesture.state == .began else { return }
         let touchPoint = gesture.location(in: mapService.mapView)
-        // 长按坐标必须以地图实际回调出来的 CLLocationCoordinate2D 为准
         guard let mk = mapService.mapView as? MKMapView else { return }
         let coordinate = mk.convert(touchPoint, toCoordinateFrom: mk)
+
+        // "增加途径点"模式：把长按位置作为途径点
+        if isAddingWaypoint {
+            let wp = LocationPoint(coordinate: coordinate, name: "途径点\(waypoints.count + 1)")
+            waypoints.append(wp)
+            locationCard.updateWaypointCount(waypoints.count)
+            mapService.addMarker(at: coordinate, title: wp.name, subtitle: nil)
+            return
+        }
+
+        // 默认：长按位置作为最终模拟目标
         let target = LocationPoint(coordinate: coordinate, name: "模拟目标")
-        // 设置模拟目标 = 长按坐标
         mockPoint = target
         selectedPoint = target
+        simulationTarget = target
         mapService.addMarker(at: coordinate, title: "模拟目标", subtitle: nil)
         locationCard.update(point: target)
         locationCard.setStartEnabled(true)
         // 如果当前已处于模拟状态，则更新模拟目标为新的长按位置
-        if backend.status == .running {
-            backend.startSimulation(at: target)
+        if isSimulating {
+            restartSingleSimulationWithNewTarget(target)
         }
     }
 
@@ -293,6 +347,15 @@ final class MapViewController: UIViewController {
     }
 
     private func handleSingleModeTap(_ coordinate: CLLocationCoordinate2D) {
+        // "增加途径点"模式下，单击地图也添加途径点
+        if isAddingWaypoint {
+            let wp = LocationPoint(coordinate: coordinate, name: "途径点\(waypoints.count + 1)")
+            waypoints.append(wp)
+            locationCard.updateWaypointCount(waypoints.count)
+            mapService.addMarker(at: coordinate, title: wp.name, subtitle: nil)
+            return
+        }
+
         Task {
             let point = LocationPoint(coordinate: coordinate)
             await MainActor.run {
@@ -329,6 +392,17 @@ final class MapViewController: UIViewController {
         updateRouteCardInfo()
     }
 
+    // MARK: - 途径点模式切换
+
+    private func toggleWaypointAdding() {
+        isAddingWaypoint.toggle()
+        locationCard.setWaypointAdding(isAddingWaypoint)
+        if isAddingWaypoint {
+            // 进入途径点添加模式，清除当前选中点 Marker
+            mapService.removeMarker()
+        }
+    }
+
     // MARK: - 搜索
 
     private func performSearch(_ keyword: String) {
@@ -339,7 +413,7 @@ final class MapViewController: UIViewController {
         }
         Task {
             do {
-                let region = currentRealLocation.map {
+                let region = realLocation.map {
                     CLCircularRegion(center: $0.coordinate, radius: 50_000, identifier: "search")
                 }
                 let results = try await geocoding.search(keyword: keyword, region: region)
@@ -370,8 +444,11 @@ final class MapViewController: UIViewController {
         mapService.showLocation(coordinate, latitudinalMeters: 1000, longitudinalMeters: 1000)
         let point = result.point
         selectedPoint = point
+        mockPoint = point
+        simulationTarget = point
         mapService.addMarker(at: coordinate, title: point.name, subtitle: point.address)
         locationCard.update(point: point)
+        locationCard.setStartEnabled(true)
         searchResults.view.isHidden = true
     }
 
@@ -396,7 +473,6 @@ final class MapViewController: UIViewController {
         }
         let coords = routePoints.map { $0.coordinate }
         mapService.drawRoute(points: coords)
-        // 在终点放一个 Marker
         if let last = routePoints.last {
             mapService.addMarker(at: last.coordinate,
                                  title: last.name,
@@ -413,7 +489,7 @@ final class MapViewController: UIViewController {
                                   estimatedDuration: route.estimatedDuration)
     }
 
-    // MARK: - 路线模拟控制
+    // MARK: - 路线模式模拟控制
 
     private func startRoute() {
         guard routePoints.count >= 2 else {
@@ -440,26 +516,152 @@ final class MapViewController: UIViewController {
         updateRouteCardInfo()
     }
 
-    // MARK: - 单点模拟
+    // MARK: - 单点模拟（人物移动 + 路线推进）
 
     private func toggleSingleSimulation() {
-        switch backend.status {
-        case .stopped:
-            // 起点概念上为当前真实 GPS 位置；目标点为用户长按地图所选位置
-            // SystemLocationBackend.startSimulation 直接将系统定位注入到目标坐标
-            guard let point = mockPoint else {
-                // 未指定目标 → 提示用户长按地图选择模拟目标
-                let alert = UIAlertController(title: "未选择目标",
-                                              message: "请长按地图选择模拟目标位置",
-                                              preferredStyle: .alert)
-                alert.addAction(UIAlertAction(title: "好", style: .default))
-                present(alert, animated: true)
-                return
-            }
-            backend.startSimulation(at: point)
-        case .running:
+        if isSimulating {
+            // 停止模拟
+            routeManager.stop()
             backend.stopSimulation()
+            return
         }
+        startSingleSimulation()
+    }
+
+    private func startSingleSimulation() {
+        // 起点规则：
+        // - 已有 simulationLocation：从当前模拟位置继续
+        // - 首次模拟：从真实 GPS 位置开始
+        let startPoint: LocationPoint
+        if let sim = simulationLocation {
+            startPoint = LocationPoint(coordinate: sim.coordinate, name: "当前模拟位置")
+        } else if let real = realLocation {
+            startPoint = LocationPoint(coordinate: real.coordinate, name: "起点")
+            simulationLocation = real
+        } else {
+            // 没有真实位置，提示先获取
+            let alert = UIAlertController(title: "无真实位置",
+                                          message: "请先点击右下角"我的位置"获取真实 GPS",
+                                          preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "好", style: .default))
+            present(alert, animated: true)
+            return
+        }
+
+        // 构建路线点：[起点, 途径点1, 途径点2, ..., 最终目标]
+        var routePoints: [RoutePoint] = [RoutePoint(coordinate: startPoint.coordinate, name: "起点")]
+        routePoints.append(contentsOf: waypoints.map { RoutePoint(coordinate: $0.coordinate, name: $0.name) })
+        if let target = mockPoint {
+            // 避免与途径点重复
+            let exists = waypoints.contains { $0.coordinate.latitude == target.coordinate.latitude
+                                              && $0.coordinate.longitude == target.coordinate.longitude }
+            if !exists {
+                routePoints.append(RoutePoint(coordinate: target.coordinate, name: target.name ?? "目标"))
+            }
+        }
+        guard routePoints.count >= 2 else {
+            let alert = UIAlertController(title: "未选择目标",
+                                          message: "请长按地图选择模拟目标位置，或点击"增加途径点"",
+                                          preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "好", style: .default))
+            present(alert, animated: true)
+            return
+        }
+        // 速度按单点模式默认 5 m/s（可后续暴露 UI 调整）
+        let route = Route(points: routePoints, speedMetersPerSecond: 5.0, loop: false)
+        simulationTarget = mockPoint ?? waypoints.last
+        currentWaypointIndex = 0
+        // 显示人物 Icon
+        mapService.updatePersonIcon(at: startPoint.coordinate)
+        // 绘制剩余路线：起点 → 途径点 → 目标
+        let remaining = routePoints.dropFirst().map { $0.coordinate }
+        mapService.drawRemainingRoute(from: startPoint.coordinate, points: remaining)
+        // 保存当前路线点供 onRouteProgress 使用
+        currentSingleRoutePoints = routePoints
+        // 启动 RouteManager 推进
+        routeManager.start(route: route, backend: backend)
+    }
+
+    /// 模拟过程中长按更新目标
+    private func restartSingleSimulationWithNewTarget(_ newTarget: LocationPoint) {
+        // 当前 simulationLocation 作为新起点
+        guard let sim = simulationLocation else { return }
+        let startPoint = LocationPoint(coordinate: sim.coordinate, name: "当前模拟位置")
+        var newRoutePoints: [RoutePoint] = [RoutePoint(coordinate: startPoint.coordinate, name: "起点")]
+        // 保留未到达的途径点
+        let remainingWaypoints = Array(waypoints.dropFirst(currentWaypointIndex))
+        newRoutePoints.append(contentsOf: remainingWaypoints.map { RoutePoint(coordinate: $0.coordinate, name: $0.name) })
+        newRoutePoints.append(RoutePoint(coordinate: newTarget.coordinate, name: newTarget.name ?? "目标"))
+        let route = Route(points: newRoutePoints, speedMetersPerSecond: 5.0, loop: false)
+        simulationTarget = newTarget
+        mockPoint = newTarget
+        // 停止当前并重启
+        routeManager.stop()
+        // restart 时 stopSimulation 会清除状态，重新 start
+        mapService.updatePersonIcon(at: startPoint.coordinate)
+        let remaining = newRoutePoints.dropFirst().map { $0.coordinate }
+        mapService.drawRemainingRoute(from: startPoint.coordinate, points: remaining)
+        currentSingleRoutePoints = newRoutePoints
+        routeManager.start(route: route, backend: backend)
+    }
+
+    /// RouteManager 推进回调：更新 simulationLocation / 人物 Icon / 地图中心 / 剩余路线
+    private func onRouteProgress(_ progress: RouteProgress) {
+        let coord = progress.currentCoordinate
+        simulationLocation = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
+        // 更新人物 Icon
+        mapService.updatePersonIcon(at: coord)
+        // 地图中心跟随 simulationLocation
+        mapService.moveTo(coord)
+        // 重新计算剩余路线：当前点 → 剩余途径点
+        // 段索引 progress.segmentIndex 表示当前在 第 idx 到 第 idx+1 段
+        // 剩余点 = [idx+1, idx+2, ..., 末尾]
+        let routePoints = currentSingleRoutePoints
+        let remainingIdx = progress.segmentIndex + 1
+        if remainingIdx < routePoints.count {
+            let remaining = Array(routePoints[remainingIdx...].map { .coordinate })
+            mapService.drawRemainingRoute(from: coord, points: remaining)
+        } else {
+            mapService.clearRemainingRoute()
+        }
+        currentWaypointIndex = progress.segmentIndex
+    }
+
+    /// 模拟结束回调
+    private func onSimulationEnded() {
+        // 不自动恢复真实位置（保持当前位置），仅清除人物 Icon 和剩余路线
+        // 由用户点击"恢复真实位置"主动恢复
+        mapService.clearRemainingRoute()
+        // 保留人物 Icon 在最后位置直到用户恢复真实位置
+    }
+
+    // MARK: - 恢复真实位置
+
+    private func restoreRealLocation() {
+        // 1. 停止当前模拟
+        routeManager.stop()
+        backend.stopSimulation()
+        // 2. 清除模拟状态
+        simulationLocation = nil
+        simulationTarget = nil
+        waypoints.removeAll()
+        currentWaypointIndex = 0
+        mockPoint = nil
+        selectedPoint = nil
+        locationCard.update(point: nil)
+        locationCard.updateWaypointCount(0)
+        locationCard.setStartEnabled(false)
+        // 3. 清除地图人物 Icon 与剩余路线
+        mapService.removePersonIcon()
+        mapService.clearRemainingRoute()
+        mapService.removeMarker()
+        // 4. 重新获取最新真实 GPS
+        realLocation = nil
+        guard CLLocationManager.locationServicesEnabled() else {
+            present(locationFailAlert("系统定位服务未开启"), animated: true)
+            return
+        }
+        realLocationManager.requestLocation()
     }
 }
 
@@ -470,17 +672,19 @@ extension MapViewController: CLLocationManagerDelegate {
         guard let location = locations.last else { return }
         // 过滤缓存坐标：timestamp 超过 5 秒视为旧位置，丢弃
         if Date().timeIntervalSince(location.timestamp) > 5 { return }
-        currentRealLocation = location
-        // 地图中心以真实 GPS 坐标为准
+        // 过滤低精度坐标
+        if location.horizontalAccuracy < 0 || location.horizontalAccuracy > 50 { return }
+        realLocation = location
+        // 模拟中：realLocation 只保存，绝不修改地图中心 / Marker / 人物 Icon
+        if isSimulating { return }
+        // 非模拟：地图中心 = realLocation，Marker = realLocation
         mapService.showLocation(location.coordinate,
                                 latitudinalMeters: 500,
                                 longitudinalMeters: 500)
-        // 显式显示"我的位置"Marker，不依赖系统蓝点（系统蓝点可能用不同定位源）
         mapService.addMarker(at: location.coordinate, title: "我的位置", subtitle: nil)
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        // 获取不到真实 GPS 时，明确提示定位失败，不要使用其他位置代替
         present(locationFailAlert(error.localizedDescription), animated: true)
     }
 

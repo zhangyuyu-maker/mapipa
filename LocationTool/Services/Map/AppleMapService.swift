@@ -11,12 +11,14 @@ final class AppleMapService: NSObject, MapService {
 
     private var selectionAnnotation: MKPointAnnotation?
     private var routeOverlay: MKOverlay?
+    private var personAnnotation: MKPointAnnotation?
+    private var remainingRouteOverlay: MKOverlay?
 
     override init() {
         let mv = MKMapView(frame: .zero)
         mv.showsCompass = true
         mv.showsScale = true
-        mv.showsUserLocation = true
+        mv.showsUserLocation = false   // 不依赖系统蓝点，避免与模拟位置混淆
         mv.isRotateEnabled = false
         mv.isPitchEnabled = false
         self.mkMapView = mv
@@ -92,6 +94,45 @@ final class AppleMapService: NSObject, MapService {
             routeOverlay = nil
         }
     }
+
+    // MARK: - 模拟状态专用
+
+    func updatePersonIcon(at coordinate: CLLocationCoordinate2D) {
+        if let existing = personAnnotation {
+            existing.coordinate = coordinate
+        } else {
+            let ann = MKPointAnnotation()
+            ann.coordinate = coordinate
+            ann.title = "模拟人物"
+            personAnnotation = ann
+            mkMapView.addAnnotation(ann)
+        }
+    }
+
+    func removePersonIcon() {
+        if let existing = personAnnotation {
+            mkMapView.removeAnnotation(existing)
+            personAnnotation = nil
+        }
+    }
+
+    func drawRemainingRoute(from current: CLLocationCoordinate2D,
+                            points: [CLLocationCoordinate2D]) {
+        clearRemainingRoute()
+        var coords: [CLLocationCoordinate2D] = [current]
+        coords.append(contentsOf: points)
+        guard coords.count >= 2 else { return }
+        let polyline = MKPolyline(coordinates: coords, count: coords.count)
+        remainingRouteOverlay = polyline
+        mkMapView.addOverlay(polyline)
+    }
+
+    func clearRemainingRoute() {
+        if let overlay = remainingRouteOverlay {
+            mkMapView.removeOverlay(overlay)
+            remainingRouteOverlay = nil
+        }
+    }
 }
 
 // MARK: - MKMapViewDelegate
@@ -100,6 +141,20 @@ extension AppleMapService: MKMapViewDelegate {
     func mapView(_ mapView: MKMapView,
                  viewFor annotation: MKAnnotation) -> MKAnnotationView? {
         guard !(annotation is MKUserLocation) else { return nil }
+
+        // 人物 Icon —— 使用 figure.walk 图标，与目标 Marker 区分
+        if annotation === personAnnotation {
+            let id = "PersonIcon"
+            let view = (mapView.dequeueReusableAnnotationView(withIdentifier: id)
+                        as? MKMarkerAnnotationView)
+                        ?? MKMarkerAnnotationView(annotation: annotation, reuseIdentifier: id)
+            view.annotation = annotation
+            view.markerTintColor = .systemPurple
+            view.glyphImage = UIImage(systemName: "figure.walk")
+            view.canShowCallout = false
+            return view
+        }
+
         let id = "SelectionMarker"
         let view = mapView.dequeueReusableAnnotationView(withIdentifier: id)
             as? MKMarkerAnnotationView ?? MKMarkerAnnotationView(annotation: annotation, reuseIdentifier: id)
@@ -114,8 +169,13 @@ extension AppleMapService: MKMapViewDelegate {
                  rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
         if let polyline = overlay as? MKPolyline {
             let renderer = MKPolylineRenderer(polyline: polyline)
-            renderer.strokeColor = .systemBlue
-            renderer.lineWidth = 4
+            if overlay === remainingRouteOverlay {
+                renderer.strokeColor = .systemTeal
+                renderer.lineWidth = 5
+            } else {
+                renderer.strokeColor = .systemBlue
+                renderer.lineWidth = 4
+            }
             return renderer
         }
         return MKOverlayRenderer(overlay: overlay)

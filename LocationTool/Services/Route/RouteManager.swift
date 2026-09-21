@@ -9,7 +9,7 @@ final class RouteManager {
     private weak var backend: LocationBackend?
 
     private var timer: Timer?
-    private let tickInterval: TimeInterval = 0.5
+    private let tickInterval: TimeInterval = 0.2
 
     /// 累积距离数组：cumulative[i] 表示到第 i 个点的累计距离
     private var cumulative: [Double] = []
@@ -45,8 +45,9 @@ final class RouteManager {
         onStatusChange?(status)
 
         // 立即下发起点
-        backend.startSimulation(at: route.points[0].locationPoint)
-        emitProgress(at: 0)
+        let startPoint = route.points[0]
+        backend.startSimulation(at: startPoint.locationPoint)
+        emitProgress(at: 0, coordinate: startPoint.coordinate)
         startTimer()
     }
 
@@ -111,8 +112,9 @@ final class RouteManager {
             } else {
                 // 到达终点
                 elapsedDistance = totalDistance
-                backend?.startSimulation(at: route.points.last!.locationPoint)
-                emitProgress(at: route.points.count - 2)
+                let end = route.points.last!
+                backend?.startSimulation(at: end.locationPoint)
+                emitProgress(at: route.points.count - 2, coordinate: end.coordinate)
                 stopTimer()
                 status = .stopped
                 onStatusChange?(status)
@@ -134,18 +136,20 @@ final class RouteManager {
         let p1 = route.points[idx + 1]
         let lat = p0.latitude + (p1.latitude - p0.latitude) * t
         let lon = p0.longitude + (p1.longitude - p0.longitude) * t
+        let coord = CLLocationCoordinate2D(latitude: lat, longitude: lon)
         let point = LocationPoint(latitude: lat, longitude: lon)
         backend?.startSimulation(at: point)
-        emitProgress(at: idx)
+        emitProgress(at: idx, coordinate: coord)
     }
 
-    private func emitProgress(at segmentIndex: Int) {
+    private func emitProgress(at segmentIndex: Int, coordinate: CLLocationCoordinate2D) {
         guard let route = route else { return }
         let p = RouteProgress(elapsedDistance: elapsedDistance,
                               totalDistance: totalDistance,
                               speed: route.speedMetersPerSecond,
                               segmentIndex: segmentIndex,
-                              totalSegments: max(0, route.points.count - 1))
+                              totalSegments: max(0, route.points.count - 1),
+                              currentCoordinate: coordinate)
         onProgress?(p)
     }
 }

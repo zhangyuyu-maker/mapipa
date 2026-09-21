@@ -1,18 +1,23 @@
 import UIKit
 
 /// 底部位置信息卡片
-/// 展示当前选中点的名称、经纬度，以及「设为模拟位置」「开始/停止模拟」按钮
+/// 展示当前选中点的名称、经纬度，以及「设为模拟位置」「开始/停止模拟」「增加途径点」「恢复真实位置」按钮
 final class LocationCardView: UIView {
     private let nameLabel = UILabel()
     private let addressLabel = UILabel()
     private let coordinateLabel = UILabel()
     private let statusLabel = UILabel()
     private let statusDot = UIView()
+    private let waypointLabel = UILabel()
     let setMockButton = UIButton(type: .system)
     let startButton = UIButton(type: .system)
+    let addWaypointButton = UIButton(type: .system)
+    let restoreRealLocationButton = UIButton(type: .system)
 
     var onSetMock: (() -> Void)?
     var onStartStop: (() -> Void)?
+    var onAddWaypoint: (() -> Void)?
+    var onRestoreRealLocation: (() -> Void)?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -49,6 +54,10 @@ final class LocationCardView: UIView {
         statusLabel.font = .systemFont(ofSize: 12)
         statusLabel.text = "模拟定位：已停止"
 
+        waypointLabel.font = .systemFont(ofSize: 12)
+        waypointLabel.textColor = .secondaryLabel
+        waypointLabel.text = "途径点：0"
+
         setMockButton.setTitle("设为模拟位置", for: .normal)
         setMockButton.configuration = .filled()
         setMockButton.isEnabled = false
@@ -60,23 +69,38 @@ final class LocationCardView: UIView {
         startButton.isEnabled = false
         startButton.addTarget(self, action: #selector(startTapped), for: .touchUpInside)
 
+        addWaypointButton.setTitle("增加途径点", for: .normal)
+        addWaypointButton.configuration = .tinted()
+        addWaypointButton.tintColor = .systemBlue
+        addWaypointButton.addTarget(self, action: #selector(addWaypointTapped), for: .touchUpInside)
+
+        restoreRealLocationButton.setTitle("恢复真实位置", for: .normal)
+        restoreRealLocationButton.configuration = .tinted()
+        restoreRealLocationButton.tintColor = .systemOrange
+        restoreRealLocationButton.addTarget(self, action: #selector(restoreTapped), for: .touchUpInside)
+
         let infoStack = UIStackView(arrangedSubviews: [nameLabel, addressLabel, coordinateLabel])
         infoStack.axis = .vertical
         infoStack.spacing = 2
 
-        let statusStack = UIStackView(arrangedSubviews: [statusDot, statusLabel])
+        let statusStack = UIStackView(arrangedSubviews: [statusDot, statusLabel, waypointLabel])
         statusStack.axis = .horizontal
         statusStack.spacing = 6
         statusStack.alignment = .center
 
-        let buttonStack = UIStackView(arrangedSubviews: [setMockButton, startButton])
-        buttonStack.axis = .horizontal
-        buttonStack.spacing = 12
-        buttonStack.distribution = .fillEqually
+        let primaryButtonStack = UIStackView(arrangedSubviews: [setMockButton, startButton])
+        primaryButtonStack.axis = .horizontal
+        primaryButtonStack.spacing = 12
+        primaryButtonStack.distribution = .fillEqually
 
-        let root = UIStackView(arrangedSubviews: [infoStack, statusStack, buttonStack])
+        let secondaryButtonStack = UIStackView(arrangedSubviews: [addWaypointButton, restoreRealLocationButton])
+        secondaryButtonStack.axis = .horizontal
+        secondaryButtonStack.spacing = 12
+        secondaryButtonStack.distribution = .fillEqually
+
+        let root = UIStackView(arrangedSubviews: [infoStack, statusStack, primaryButtonStack, secondaryButtonStack])
         root.axis = .vertical
-        root.spacing = 10
+        root.spacing = 8
         root.translatesAutoresizingMaskIntoConstraints = false
         addSubview(root)
 
@@ -125,6 +149,17 @@ final class LocationCardView: UIView {
         startButton.isEnabled = enabled
     }
 
+    func updateWaypointCount(_ count: Int) {
+        waypointLabel.text = "途径点：\(count)"
+    }
+
+    func setWaypointAdding(_ adding: Bool) {
+        addWaypointButton.tintColor = adding ? .systemTeal : .systemBlue
+        addWaypointButton.setTitle(adding ? "结束途径点" : "增加途径点", for: .normal)
+    }
+
     @objc private func setMockTapped() { onSetMock?() }
     @objc private func startTapped() { onStartStop?() }
+    @objc private func addWaypointTapped() { onAddWaypoint?() }
+    @objc private func restoreTapped() { onRestoreRealLocation?() }
 }

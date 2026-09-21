@@ -30,4 +30,19 @@ protocol MapService: AnyObject {
 
     /// 用户点击地图回调
     var onMapTapped: ((CLLocationCoordinate2D) -> Void)? { get set }
+
+    // MARK: - 模拟状态专用（不影响上方既有方法）
+
+    /// 更新/添加人物 Icon（仅模拟时使用，与 addMarker 互不干扰）
+    func updatePersonIcon(at coordinate: CLLocationCoordinate2D)
+
+    /// 移除人物 Icon
+    func removePersonIcon()
+
+    /// 绘制剩余路线（从当前位置到剩余途径点）
+    func drawRemainingRoute(from current: CLLocationCoordinate2D,
+                            points: [CLLocationCoordinate2D])
+
+    /// 清除剩余路线
+    func clearRemainingRoute()
 }
