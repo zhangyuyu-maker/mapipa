@@ -83,6 +83,9 @@ final class MapViewController: UIViewController {
         locationCard.updateWaypointCount(waypoints.count)
         updateModeUI()
         updateRouteCardInfo()
+        // 默认显示一个区域，避免真实 GPS 还没回来时地图空白
+        let defaultCoord = CLLocationCoordinate2D(latitude: 35.0, longitude: 105.0)
+        mapService.showLocation(defaultCoord, latitudinalMeters: 2_000_000, longitudinalMeters: 2_000_000)
     }
 
     // MARK: - 布局
@@ -266,6 +269,11 @@ final class MapViewController: UIViewController {
         realLocationManager.pausesLocationUpdatesAutomatically = false
         realLocationManager.distanceFilter = kCLDistanceFilterNone
         realLocationManager.requestWhenInUseAuthorization()
+        // 已授权则立即请求一次位置（避免已授权用户启动时地图空白无蓝点）
+        if realLocationManager.authorizationStatus == .authorizedWhenInUse
+            || realLocationManager.authorizationStatus == .authorizedAlways {
+            realLocationManager.requestLocation()
+        }
     }
 
     /// 右下角"我的位置"按钮
