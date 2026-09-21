@@ -619,7 +619,7 @@ final class MapViewController: UIViewController {
         let routePoints = currentSingleRoutePoints
         let remainingIdx = progress.segmentIndex + 1
         if remainingIdx < routePoints.count {
-            let remaining = Array(routePoints[remainingIdx...].map { .coordinate })
+            let remaining = Array(routePoints[remainingIdx...].map { $0.coordinate })
             mapService.drawRemainingRoute(from: coord, points: remaining)
         } else {
             mapService.clearRemainingRoute()
