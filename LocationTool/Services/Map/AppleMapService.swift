@@ -151,14 +151,13 @@ extension AppleMapService: MKMapViewDelegate {
     /// 用户点击三角按钮后切换跟踪模式时回调
     /// 当切换到 follow / followWithHeading 时, 如果当前缩放级别过大, 自动缩放到街道级别 (200m)
     /// 这样用户点击三角按钮后能看到附近店名
-    func mapView(_ mapView: MKMapView,
-                 didChangeUserTrackingMode mode: MKUserTrackingMode,
+    func mapView(_ mapView: MKMapView, didChange mode: MKUserTrackingMode,
                  animated: Bool) {
         switch mode {
         case .follow, .followWithHeading:
-            let region = mapView.region
-            // 当前跨度大于 500m 才放大 (避免用户已处于更精细级别时被强制缩小)
-            if region.latitudinalMeters > 500 || region.longitudinalMeters > 500 {
+            let span = mapView.region.span
+            // 当前跨度大于 ~500m (纬度 0.0045°≈500m) 才放大, 避免用户已处于更精细级别时被强制缩小
+            if span.latitudeDelta > 0.0045 || span.longitudeDelta > 0.0045 {
                 let street = MKCoordinateRegion(
                     center: mapView.centerCoordinate,
                     latitudinalMeters: 200,
