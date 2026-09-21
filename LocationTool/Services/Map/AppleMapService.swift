@@ -13,6 +13,8 @@ final class AppleMapService: NSObject, MapService {
     private var routeOverlay: MKOverlay?
     private var personAnnotation: MKPointAnnotation?
     private var remainingRouteOverlay: MKOverlay?
+    /// 是否已首次缩放到用户位置 (避免每次 userLocation 更新都缩放)
+    private var hasZoomedToUserLocation = false
 
     override init() {
         let mv = MKMapView(frame: .zero)
@@ -155,18 +157,35 @@ extension AppleMapService: MKMapViewDelegate {
                  animated: Bool) {
         switch mode {
         case .follow, .followWithHeading:
-            // 用蓝点 (用户位置) 作为中心, 不是地图当前中心
-            let center = mapView.userLocation.coordinate
+            // 必须检查 userLocation.location != nil, 否则首次启动 GPS 还没来时
+            // userLocation.coordinate 可能是 (0,0), 缩放过去会导致位置不在屏幕中心
+            guard let userLoc = mapView.userLocation.location else { return }
+            let center = userLoc.coordinate
             guard CLLocationCoordinate2DIsValid(center) else { return }
             let street = MKCoordinateRegion(
                 center: center,
                 latitudinalMeters: 200,
                 longitudinalMeters: 200
             )
-            mapView.setRegion(street, animated: true)
+            mapView.setRegion(street, animated: animated)
         default:
             break
         }
+    }
+
+    /// userLocation 更新时回调 (首次收到有效 GPS 后缩放到 200m 街道级别)
+    /// 解决首次启动 GPS 还没来时 didChange 拿不到位置的问题
+    func mapView(_ mapView: MKMapView, didUpdate userLocation: MKUserLocation) {
+        guard !hasZoomedToUserLocation else { return }
+        let center = userLocation.coordinate
+        guard CLLocationCoordinate2DIsValid(center) else { return }
+        let street = MKCoordinateRegion(
+            center: center,
+            latitudinalMeters: 200,
+            longitudinalMeters: 200
+        )
+        mapView.setRegion(street, animated: true)
+        hasZoomedToUserLocation = true
     }
 
     func mapView(_ mapView: MKMapView,
