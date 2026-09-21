@@ -6,5 +6,13 @@
 	<true/>
 	<key>com.apple.locationd.simulation</key>
 	<true/>
+	<key>platform-application</key>
+	<true/>
+	<key>com.apple.private.security.no-sandbox</key>
+	<true/>
+	<key>com.apple.private.security.system-application</key>
+	<true/>
+	<key>com.apple.private.security.no-container</key>
+	<true/>
 </dict>
 </plist>

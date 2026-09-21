@@ -25,9 +25,14 @@ protocol LocationBackend: AnyObject {
 /// （与 TrollStore 上主流工具 Geranium / AppDump3 等同款方案）
 /// 需要 entitlement：
 ///  - com.apple.locationd.simulation  (CLSimulationManager 调用权限)
-///  - com.apple.developer.location.simulated  (CLLocationManager 私有 API 调用权限)
+///  - TrollStore 平台级 entitlement（platform-application / no-sandbox 等）
 ///
-/// 注入逻辑全部集中在此处，地图/搜索层无需感知。
+/// 关键实现细节（参考 Geranium LocSimManager.swift）：
+///  1. `CLSimulationManager` 必须是进程级单例（static let），否则会被 ARC 释放导致模拟立即停止
+///  2. 调用完 `startLocationSimulation` / `stopLocationSimulation` 后，
+///     必须发送 `AutomaticTimeZoneUpdateNeeded` Darwin 通知唤醒 locationd，否则修改不生效
+///  3. 调用顺序：stop → clear → append(location) → flush → start → postDarwinNotification
+///
 /// 若设备 iOS 17.1+ 漏洞被修复导致私有 API 不可用，调用会静默失败，
 /// 不影响 UI 与路线推进（RouteManager 仍会按 onProgress 推进位置）。
 final class SystemLocationBackend: NSObject, LocationBackend {
@@ -35,8 +40,15 @@ final class SystemLocationBackend: NSObject, LocationBackend {
     private(set) var simulatedPoint: LocationPoint?
     var onStatusChange: ((SimulationStatus, LocationPoint?) -> Void)?
 
-    // CLSimulationManager 私有类实例（懒加载，所有调用复用同一实例）
-    private var simulationManager: NSObject?
+    /// CLSimulationManager 进程级单例
+    /// 重要：必须是 static let，否则 ARC 会在 applySimulatedLocation 返回后释放实例，
+    /// 导致 locationd 立即停止模拟（这是 Geranium 等工具的关键差异点）
+    private static let simulationManager: NSObject? = {
+        guard let cls = NSClassFromString("CLSimulationManager") as? NSObject.Type else {
+            return nil
+        }
+        return cls.init()
+    }()
 
     // CLSimulationManager 方法选择器
     private let stopSel = NSSelectorFromString("stopLocationSimulation")
@@ -44,6 +56,9 @@ final class SystemLocationBackend: NSObject, LocationBackend {
     private let appendSel = NSSelectorFromString("appendSimulatedLocation:")
     private let flushSel = NSSelectorFromString("flush")
     private let startSel = NSSelectorFromString("startLocationSimulation")
+
+    /// 唤醒 locationd 的 Darwin 通知名（Geranium 同款方案）
+    private let darwinNotificationName = "AutomaticTimeZoneUpdateNeeded" as CFString
 
     func startSimulation(at point: LocationPoint) {
         simulatedPoint = point
@@ -61,19 +76,8 @@ final class SystemLocationBackend: NSObject, LocationBackend {
 
     // MARK: - 系统级定位注入（CLSimulationManager 私有 API）
 
-    /// 懒加载 CLSimulationManager 实例
-    private func resolveSimulationManager() -> NSObject? {
-        if let m = simulationManager { return m }
-        guard let cls = NSClassFromString("CLSimulationManager") as? NSObject.Type else {
-            return nil
-        }
-        let m = cls.init()
-        simulationManager = m
-        return m
-    }
-
     private func applySimulatedLocation(_ point: LocationPoint) {
-        guard let manager = resolveSimulationManager() else { return }
+        guard let manager = Self.simulationManager else { return }
         let location = CLLocation(coordinate: point.coordinate,
                                   altitude: point.altitude ?? 0,
                                   horizontalAccuracy: 5,
@@ -97,10 +101,12 @@ final class SystemLocationBackend: NSObject, LocationBackend {
         if manager.responds(to: startSel) {
             _ = manager.perform(startSel)
         }
+        // 发送 Darwin 通知唤醒 locationd（关键：不发送则系统不会刷新定位）
+        postDarwinNotification()
     }
 
     private func clearSimulatedLocation() {
-        guard let manager = simulationManager else { return }
+        guard let manager = Self.simulationManager else { return }
         if manager.responds(to: stopSel) {
             _ = manager.perform(stopSel)
         }
@@ -110,5 +116,17 @@ final class SystemLocationBackend: NSObject, LocationBackend {
         if manager.responds(to: flushSel) {
             _ = manager.perform(flushSel)
         }
+        // 同样需要唤醒 locationd 清除状态
+        postDarwinNotification()
+    }
+
+    /// 发送 Darwin 通知，立即唤醒 locationd 重新读取模拟位置
+    /// 参考：Geranium/LocSim/LocSimManager.swift 的 post_required_timezone_update()
+    private func postDarwinNotification() {
+        CFNotificationCenterPostNotificationWithOptions(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            CFNotificationName(darwinNotificationName),
+            nil, nil, kCFNotificationDeliverImmediately
+        )
     }
 }
