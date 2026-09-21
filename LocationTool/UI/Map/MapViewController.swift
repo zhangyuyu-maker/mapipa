@@ -691,9 +691,13 @@ final class MapViewController: UIViewController {
         mapService.removePersonIcon()
         mapService.clearRemainingRoute()
         mapService.setShowsMyLocation(true)
-        // 4. 请求 GPS, 收到真实位置后 moveTo 平滑过渡到真实位置 (不等蓝点)
-        isRestoringRealLocation = true
-        realLocationManager.requestLocation()
+        // 4. 用缓存的真实位置 moveTo 平滑过渡 (模拟前保存的真实GPS)
+        if let real = realLocation {
+            mapService.moveTo(real.coordinate)
+        } else {
+            isRestoringRealLocation = true
+            realLocationManager.requestLocation()
+        }
     }
 }
 
@@ -707,14 +711,14 @@ extension MapViewController: CLLocationManagerDelegate {
         // 过滤低精度坐标
         if location.horizontalAccuracy < 0 || location.horizontalAccuracy > 50 { return }
         realLocation = location
-        // 模拟中：realLocation 只保存，绝不修改地图中心 / Marker / 人物 Icon
-        if isSimulating { return }
-        // 恢复真实位置: 用 moveTo 平滑过渡到真实位置 (保持当前缩放级别, 不缩放到 500m)
+        // 恢复真实位置: 用 moveTo 平滑过渡到真实位置 (优先处理, 不受 isSimulating 影响)
         if isRestoringRealLocation {
             isRestoringRealLocation = false
             mapService.moveTo(location.coordinate)
             return
         }
+        // 模拟中：realLocation 只保存，绝不修改地图中心 / Marker / 人物 Icon
+        if isSimulating { return }
         // 非模拟：地图中心 = realLocation（系统蓝点自动显示真实位置）
         mapService.showLocation(location.coordinate,
                                 latitudinalMeters: 500,
