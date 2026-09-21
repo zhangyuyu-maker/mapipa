@@ -56,6 +56,7 @@ final class MapViewController: UIViewController {
         setupLayout()
         bindActions()
         setupRealLocation()
+        setupLongPressGesture()
         locationCard.updateStatus(backend.status)
         updateModeUI()
         updateRouteCardInfo()
@@ -230,13 +231,53 @@ final class MapViewController: UIViewController {
 
     private func setupRealLocation() {
         realLocationManager.delegate = self
-        realLocationManager.desiredAccuracy = kCLLocationAccuracyBest
+        // 使用最高精度，避免室内/缓存位置造成的偏差
+        realLocationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
+        realLocationManager.pausesLocationUpdatesAutomatically = false
         realLocationManager.requestWhenInUseAuthorization()
     }
 
     @objc private func showCurrentLocation() {
-        if CLLocationManager.locationServicesEnabled() {
-            realLocationManager.requestLocation()
+        guard CLLocationManager.locationServicesEnabled() else {
+            present(locationFailAlert("系统定位服务未开启"), animated: true)
+            return
+        }
+        // 清空旧坐标，强制重新获取最新真实 GPS
+        currentRealLocation = nil
+        mapService.removeMarker()
+        realLocationManager.requestLocation()
+    }
+
+    private func locationFailAlert(_ message: String) -> UIAlertController {
+        let alert = UIAlertController(title: "定位失败", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "好", style: .default))
+        return alert
+    }
+
+    // MARK: - 长按地图设置模拟目标
+
+    private func setupLongPressGesture() {
+        let lp = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
+        lp.minimumPressDuration = 0.5
+        mapService.mapView.addGestureRecognizer(lp)
+    }
+
+    @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
+        guard gesture.state == .began else { return }
+        let touchPoint = gesture.location(in: mapService.mapView)
+        // 长按坐标必须以地图实际回调出来的 CLLocationCoordinate2D 为准
+        guard let mk = mapService.mapView as? MKMapView else { return }
+        let coordinate = mk.convert(touchPoint, toCoordinateFrom: mk)
+        let target = LocationPoint(coordinate: coordinate, name: "模拟目标")
+        // 设置模拟目标 = 长按坐标
+        mockPoint = target
+        selectedPoint = target
+        mapService.addMarker(at: coordinate, title: "模拟目标", subtitle: nil)
+        locationCard.update(point: target)
+        locationCard.setStartEnabled(true)
+        // 如果当前已处于模拟状态，则更新模拟目标为新的长按位置
+        if backend.status == .running {
+            backend.startSimulation(at: target)
         }
     }
 
@@ -404,7 +445,17 @@ final class MapViewController: UIViewController {
     private func toggleSingleSimulation() {
         switch backend.status {
         case .stopped:
-            guard let point = mockPoint else { return }
+            // 起点概念上为当前真实 GPS 位置；目标点为用户长按地图所选位置
+            // SystemLocationBackend.startSimulation 直接将系统定位注入到目标坐标
+            guard let point = mockPoint else {
+                // 未指定目标 → 提示用户长按地图选择模拟目标
+                let alert = UIAlertController(title: "未选择目标",
+                                              message: "请长按地图选择模拟目标位置",
+                                              preferredStyle: .alert)
+                alert.addAction(UIAlertAction(title: "好", style: .default))
+                present(alert, animated: true)
+                return
+            }
             backend.startSimulation(at: point)
         case .running:
             backend.stopSimulation()
@@ -417,14 +468,20 @@ final class MapViewController: UIViewController {
 extension MapViewController: CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
+        // 过滤缓存坐标：timestamp 超过 5 秒视为旧位置，丢弃
+        if Date().timeIntervalSince(location.timestamp) > 5 { return }
         currentRealLocation = location
+        // 地图中心以真实 GPS 坐标为准
         mapService.showLocation(location.coordinate,
                                 latitudinalMeters: 500,
                                 longitudinalMeters: 500)
+        // 显式显示"我的位置"Marker，不依赖系统蓝点（系统蓝点可能用不同定位源）
+        mapService.addMarker(at: location.coordinate, title: "我的位置", subtitle: nil)
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        // 真实位置获取失败时静默处理，用户仍可手动选点
+        // 获取不到真实 GPS 时，明确提示定位失败，不要使用其他位置代替
+        present(locationFailAlert(error.localizedDescription), animated: true)
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
