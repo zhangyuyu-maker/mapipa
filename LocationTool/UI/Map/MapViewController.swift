@@ -49,6 +49,8 @@ final class MapViewController: UIViewController {
     private var isAddingWaypoint: Bool = false
     /// 当前单点模拟构建的路线点（供 onRouteProgress 计算剩余路线）
     private var currentSingleRoutePoints: [RoutePoint] = []
+    /// 恢复真实位置标志: 收到 GPS 后用 moveTo 平滑过渡, 不缩放
+    private var isRestoringRealLocation = false
 
     private let realLocationManager = CLLocationManager()
 
@@ -689,8 +691,16 @@ final class MapViewController: UIViewController {
         mapService.removePersonIcon()
         mapService.clearRemainingRoute()
         mapService.setShowsMyLocation(true)
-        // 4. 不移动地图, 保持当前位置 (用户要求恢复后地图不动)
-        // 蓝点会自动从模拟位置跳回真实位置, 但地图不跟随
+        // 4. 延迟 2 秒后请求 GPS, 收到真实位置后用 moveTo 平滑过渡 (保持当前缩放级别)
+        isRestoringRealLocation = true
+        realLocation = nil
+        guard CLLocationManager.locationServicesEnabled() else {
+            present(locationFailAlert("系统定位服务未开启"), animated: true)
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            self?.realLocationManager.requestLocation()
+        }
     }
 }
 
@@ -706,6 +716,12 @@ extension MapViewController: CLLocationManagerDelegate {
         realLocation = location
         // 模拟中：realLocation 只保存，绝不修改地图中心 / Marker / 人物 Icon
         if isSimulating { return }
+        // 恢复真实位置: 用 moveTo 平滑过渡到真实位置 (保持当前缩放级别, 不缩放到 500m)
+        if isRestoringRealLocation {
+            isRestoringRealLocation = false
+            mapService.moveTo(location.coordinate)
+            return
+        }
         // 非模拟：地图中心 = realLocation（系统蓝点自动显示真实位置）
         mapService.showLocation(location.coordinate,
                                 latitudinalMeters: 500,
