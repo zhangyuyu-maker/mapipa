@@ -12,12 +12,10 @@ final class LocationCardView: UIView {
     let setMockButton = UIButton(type: .system)
     let startButton = UIButton(type: .system)
     let addWaypointButton = UIButton(type: .system)
-    let restoreRealLocationButton = UIButton(type: .system)
 
     var onSetMock: (() -> Void)?
     var onStartStop: (() -> Void)?
     var onAddWaypoint: (() -> Void)?
-    var onRestoreRealLocation: (() -> Void)?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -74,11 +72,6 @@ final class LocationCardView: UIView {
         addWaypointButton.tintColor = .systemBlue
         addWaypointButton.addTarget(self, action: #selector(addWaypointTapped), for: .touchUpInside)
 
-        restoreRealLocationButton.setTitle("恢复真实位置", for: .normal)
-        restoreRealLocationButton.configuration = .tinted()
-        restoreRealLocationButton.tintColor = .systemOrange
-        restoreRealLocationButton.addTarget(self, action: #selector(restoreTapped), for: .touchUpInside)
-
         let infoStack = UIStackView(arrangedSubviews: [nameLabel, addressLabel, coordinateLabel])
         infoStack.axis = .vertical
         infoStack.spacing = 2
@@ -93,7 +86,7 @@ final class LocationCardView: UIView {
         primaryButtonStack.spacing = 12
         primaryButtonStack.distribution = .fillEqually
 
-        let secondaryButtonStack = UIStackView(arrangedSubviews: [addWaypointButton, restoreRealLocationButton])
+        let secondaryButtonStack = UIStackView(arrangedSubviews: [addWaypointButton])
         secondaryButtonStack.axis = .horizontal
         secondaryButtonStack.spacing = 12
         secondaryButtonStack.distribution = .fillEqually
@@ -161,5 +154,4 @@ final class LocationCardView: UIView {
     @objc private func setMockTapped() { onSetMock?() }
     @objc private func startTapped() { onStartStop?() }
     @objc private func addWaypointTapped() { onAddWaypoint?() }
-    @objc private func restoreTapped() { onRestoreRealLocation?() }
 }

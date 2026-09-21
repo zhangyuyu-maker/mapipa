@@ -23,6 +23,7 @@ final class MapViewController: UIViewController {
     private let locationCard = LocationCardView()
     private let routeCard = RouteCardView()
     private var userTrackingButton: UIView!
+    private var restoreRealLocationButton: UIButton!
     private let searchResults = SearchResultsViewController()
     private var routeModeButton: UIBarButtonItem?
 
@@ -114,6 +115,23 @@ final class MapViewController: UIViewController {
         userTrackingButton.layer.shadowRadius = 4
         view.addSubview(userTrackingButton)
 
+        // 恢复真实位置浮动按钮 (放在三角形按钮上方, 用 icon 显示)
+        restoreRealLocationButton = UIButton(type: .system)
+        restoreRealLocationButton.setImage(UIImage(systemName: "location.fill",
+                                                  withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .medium)),
+                                           for: .normal)
+        restoreRealLocationButton.tintColor = .systemOrange
+        restoreRealLocationButton.translatesAutoresizingMaskIntoConstraints = false
+        restoreRealLocationButton.backgroundColor = .systemBackground
+        restoreRealLocationButton.layer.cornerRadius = 22
+        restoreRealLocationButton.layer.shadowColor = UIColor.black.cgColor
+        restoreRealLocationButton.layer.shadowOpacity = 0.2
+        restoreRealLocationButton.layer.shadowRadius = 4
+        restoreRealLocationButton.addTarget(self, action: #selector(restoreRealLocation), for: .touchUpInside)
+        // 默认隐藏, 仅模拟运行时显示
+        restoreRealLocationButton.isHidden = true
+        view.addSubview(restoreRealLocationButton)
+
         addChild(searchResults)
         searchResults.view.translatesAutoresizingMaskIntoConstraints = false
         searchResults.view.isHidden = true
@@ -149,6 +167,10 @@ final class MapViewController: UIViewController {
             userTrackingButton.bottomAnchor.constraint(equalTo: locationCard.topAnchor, constant: -16),
             userTrackingButton.widthAnchor.constraint(equalToConstant: 44),
             userTrackingButton.heightAnchor.constraint(equalToConstant: 44),
+            restoreRealLocationButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            restoreRealLocationButton.bottomAnchor.constraint(equalTo: userTrackingButton.topAnchor, constant: -12),
+            restoreRealLocationButton.widthAnchor.constraint(equalToConstant: 44),
+            restoreRealLocationButton.heightAnchor.constraint(equalToConstant: 44),
 
             searchResults.view.topAnchor.constraint(equalTo: searchBar.bottomAnchor),
             searchResults.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -216,9 +238,6 @@ final class MapViewController: UIViewController {
         locationCard.onAddWaypoint = { [weak self] in
             self?.toggleWaypointAdding()
         }
-        locationCard.onRestoreRealLocation = { [weak self] in
-            self?.restoreRealLocation()
-        }
 
         // 路线模式回调
         routeCard.onSpeedChange = { [weak self] speed in
@@ -244,6 +263,8 @@ final class MapViewController: UIViewController {
 
         backend.onStatusChange = { [weak self] status, _ in
             self?.locationCard.updateStatus(status)
+            // 模拟运行时显示恢复按钮, 停止时隐藏
+            self?.restoreRealLocationButton.isHidden = (status != .running)
             if status == .stopped {
                 self?.onSimulationEnded()
             }
@@ -251,6 +272,7 @@ final class MapViewController: UIViewController {
 
         routeManager.onStatusChange = { [weak self] status in
             self?.routeCard.updateStatus(status)
+            self?.restoreRealLocationButton.isHidden = (status != .running)
             if status == .stopped {
                 self?.onSimulationEnded()
             }
@@ -667,7 +689,11 @@ final class MapViewController: UIViewController {
         mapService.removePersonIcon()
         mapService.clearRemainingRoute()
         mapService.setShowsMyLocation(true)
-        // 4. 重新获取最新真实 GPS
+        // 4. 切换到跟随模式: 蓝点会从模拟位置过渡回真实位置, 地图自动跟随
+        if let mk = mapService.mapView as? MKMapView {
+            mk.setUserTrackingMode(.follow, animated: true)
+        }
+        // 5. 重新获取最新真实 GPS
         realLocation = nil
         guard CLLocationManager.locationServicesEnabled() else {
             present(locationFailAlert("系统定位服务未开启"), animated: true)
