@@ -327,18 +327,17 @@ final class MapViewController: UIViewController {
             return
         }
 
-        // 默认：长按位置作为最终模拟目标
-        let target = LocationPoint(coordinate: coordinate, name: "模拟目标")
+        // 长按 = 单纯修改系统定位到长按位置
+        // 蓝点 (showsUserLocation) 保持显示, backend.startSimulation 后系统蓝点会自动跑到长按位置
+        // 不弹功能框、不加红色 marker、不加人物 icon —— 蓝点本身就是当前位置
+        let target = LocationPoint(coordinate: coordinate, name: "模拟位置")
         mockPoint = target
-        selectedPoint = target
         simulationTarget = target
-        mapService.addMarker(at: coordinate, title: "模拟目标", subtitle: nil)
-        locationCard.update(point: target)
-        locationCard.setStartEnabled(true)
-        // 如果当前已处于模拟状态，则更新模拟目标为新的长按位置
-        if isSimulating {
-            restartSingleSimulationWithNewTarget(target)
-        }
+        simulationLocation = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        // 立即注入到系统层, 蓝点会自动跳到长按位置
+        backend.startSimulation(at: target)
+        // 地图缩放到街道级别 (200m), 能看清附近店名
+        mapService.showLocation(coordinate, latitudinalMeters: 200, longitudinalMeters: 200)
     }
 
     // MARK: - 地图点选
