@@ -20,6 +20,9 @@
 		BB0000000000000000000011 /* LocationCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000011 /* LocationCardView.swift */; };
 		BB0000000000000000000012 /* MapViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000012 /* MapViewController.swift */; };
 		BB0000000000000000000014 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000014 /* Assets.xcassets */; };
+		BB0000000000000000000017 /* RouteModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000017 /* RouteModels.swift */; };
+		BB0000000000000000000018 /* RouteManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000018 /* RouteManager.swift */; };
+		BB0000000000000000000019 /* RouteCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000019 /* RouteCardView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -39,6 +42,9 @@
 		AA0000000000000000000014 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AA0000000000000000000015 /* LocationTool.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LocationTool.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000000000000000000016 /* LocationTool.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LocationTool.entitlements; sourceTree = "<group>"; };
+		AA0000000000000000000017 /* RouteModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteModels.swift; sourceTree = "<group>"; };
+		AA0000000000000000000018 /* RouteManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteManager.swift; sourceTree = "<group>"; };
+		AA0000000000000000000019 /* RouteCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteCardView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -79,6 +85,7 @@
 			isa = PBXGroup;
 			children = (
 				AA0000000000000000000003 /* LocationPoint.swift */,
+				AA0000000000000000000017 /* RouteModels.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -89,6 +96,7 @@
 				CC0000000000000000000005 /* Geocoding */,
 				CC0000000000000000000006 /* Map */,
 				CC0000000000000000000007 /* Location */,
+				CC000000000000000000000C /* Route */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -123,6 +131,7 @@
 			isa = PBXGroup;
 			children = (
 				CC0000000000000000000009 /* Map */,
+				CC000000000000000000000D /* Route */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -136,6 +145,22 @@
 				AA0000000000000000000012 /* MapViewController.swift */,
 			);
 			path = Map;
+			sourceTree = "<group>";
+		};
+		CC000000000000000000000C /* Route */ = {
+			isa = PBXGroup;
+			children = (
+				AA0000000000000000000018 /* RouteManager.swift */,
+			);
+			path = Route;
+			sourceTree = "<group>";
+		};
+		CC000000000000000000000D /* Route */ = {
+			isa = PBXGroup;
+			children = (
+				AA0000000000000000000019 /* RouteCardView.swift */,
+			);
+			path = Route;
 			sourceTree = "<group>";
 		};
 		CC000000000000000000000A /* Resources */ = {
@@ -236,6 +261,9 @@
 				BB0000000000000000000010 /* SearchResultsViewController.swift in Sources */,
 				BB0000000000000000000011 /* LocationCardView.swift in Sources */,
 				BB0000000000000000000012 /* MapViewController.swift in Sources */,
+				BB0000000000000000000017 /* RouteModels.swift in Sources */,
+				BB0000000000000000000018 /* RouteManager.swift in Sources */,
+				BB0000000000000000000019 /* RouteCardView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

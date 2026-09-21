@@ -8,14 +8,16 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                options connectionOptions: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else { return }
 
-        // 依赖注入：地图 Provider、地理编码 Provider、定位后端
+        // 依赖注入：地图 Provider、地理编码 Provider、定位后端、路线管理器
         let mapService = AppleMapService()
         let geocoding = AppleGeocodingService()
         let backend = SystemLocationBackend()
+        let routeManager = RouteManager()
 
         let viewController = MapViewController(mapService: mapService,
                                                geocoding: geocoding,
-                                               backend: backend)
+                                               backend: backend,
+                                               routeManager: routeManager)
         let navigation = UINavigationController(rootViewController: viewController)
 
         let window = UIWindow(windowScene: windowScene)
