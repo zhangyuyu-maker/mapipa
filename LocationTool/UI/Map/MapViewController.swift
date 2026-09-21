@@ -272,6 +272,10 @@ final class MapViewController: UIViewController {
         // 已授权则立即请求一次位置（避免已授权用户启动时地图空白无蓝点）
         if realLocationManager.authorizationStatus == .authorizedWhenInUse
             || realLocationManager.authorizationStatus == .authorizedAlways {
+            // 设置跟踪模式: 蓝点一出现就自动居中, 避免启动时蓝点在屏幕边缘
+            if let mk = mapService.mapView as? MKMapView {
+                mk.setUserTrackingMode(.follow, animated: false)
+            }
             realLocationManager.requestLocation()
         }
     }
