@@ -1,4 +1,4 @@
-﻿import CoreLocation
+import CoreLocation
 import Foundation
 
 /// 位置点模型 —— 地图层与定位后端之间的唯一数据契约

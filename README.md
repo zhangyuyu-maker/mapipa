@@ -1,4 +1,4 @@
-﻿# LocationTool（定位工具）
+# LocationTool（定位工具）
 
 iOS 定位模拟工具，第一阶段：地图 + 地点搜索 + 选点 + 模拟定位。
 
