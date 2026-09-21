@@ -541,7 +541,7 @@ final class MapViewController: UIViewController {
         } else {
             // 没有真实位置，提示先获取
             let alert = UIAlertController(title: "无真实位置",
-                                          message: "请先点击右下角"我的位置"获取真实 GPS",
+                                          message: "请先点击右下角「我的位置」获取真实 GPS",
                                           preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: "好", style: .default))
             present(alert, animated: true)
@@ -561,7 +561,7 @@ final class MapViewController: UIViewController {
         }
         guard routePoints.count >= 2 else {
             let alert = UIAlertController(title: "未选择目标",
-                                          message: "请长按地图选择模拟目标位置，或点击"增加途径点"",
+                                          message: "请长按地图选择模拟目标位置，或点击「增加途径点」",
                                           preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: "好", style: .default))
             present(alert, animated: true)
