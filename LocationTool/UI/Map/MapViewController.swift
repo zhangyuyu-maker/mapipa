@@ -117,8 +117,8 @@ final class MapViewController: UIViewController {
 
         // 恢复真实位置浮动按钮 (放在三角形按钮上方, 用 icon 显示)
         restoreRealLocationButton = UIButton(type: .system)
-        restoreRealLocationButton.setImage(UIImage(systemName: "location.fill",
-                                                  withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .medium)),
+        restoreRealLocationButton.setImage(UIImage(systemName: "scope",
+                                                  withConfiguration: UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)),
                                            for: .normal)
         restoreRealLocationButton.tintColor = .systemOrange
         restoreRealLocationButton.translatesAutoresizingMaskIntoConstraints = false
@@ -689,11 +689,7 @@ final class MapViewController: UIViewController {
         mapService.removePersonIcon()
         mapService.clearRemainingRoute()
         mapService.setShowsMyLocation(true)
-        // 4. 切换到跟随模式: 蓝点会从模拟位置过渡回真实位置, 地图自动跟随
-        if let mk = mapService.mapView as? MKMapView {
-            mk.setUserTrackingMode(.follow, animated: true)
-        }
-        // 5. 重新获取最新真实 GPS
+        // 4. 重新获取最新真实 GPS (收到后 didUpdateLocations 会用 showLocation 平滑过渡到真实位置)
         realLocation = nil
         guard CLLocationManager.locationServicesEnabled() else {
             present(locationFailAlert("系统定位服务未开启"), animated: true)
