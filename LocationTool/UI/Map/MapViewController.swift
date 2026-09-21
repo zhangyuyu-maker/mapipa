@@ -330,14 +330,15 @@ final class MapViewController: UIViewController {
         // 长按 = 单纯修改系统定位到长按位置
         // 蓝点 (showsUserLocation) 保持显示, backend.startSimulation 后系统蓝点会自动跑到长按位置
         // 不弹功能框、不加红色 marker、不加人物 icon —— 蓝点本身就是当前位置
-        let target = LocationPoint(coordinate: coordinate, name: "模拟位置")
+        let wgs84Coord = CoordTransform.gcj02ToWgs84(coordinate)
+        let target = LocationPoint(coordinate: wgs84Coord, name: "模拟位置")
         mockPoint = target
         simulationTarget = target
-        simulationLocation = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
-        // 立即注入到系统层, 蓝点会自动跳到长按位置
+        simulationLocation = CLLocation(latitude: wgs84Coord.latitude, longitude: wgs84Coord.longitude)
+        // 立即注入到系统层 (WGS-84), 蓝点会自动跳到长按位置
+        // MKMapView 显示蓝点时会自动把 WGS-84 转回 GCJ-02, 所以蓝点正好落在用户长按位置
+        // 不调用 mapService.showLocation -- 保留用户当前缩放级别
         backend.startSimulation(at: target)
-        // 地图缩放到街道级别 (200m), 能看清附近店名
-        mapService.showLocation(coordinate, latitudinalMeters: 200, longitudinalMeters: 200)
     }
 
     // MARK: - 地图点选
