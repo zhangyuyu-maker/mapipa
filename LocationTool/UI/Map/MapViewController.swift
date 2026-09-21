@@ -691,13 +691,9 @@ final class MapViewController: UIViewController {
         mapService.removePersonIcon()
         mapService.clearRemainingRoute()
         mapService.setShowsMyLocation(true)
-        // 4. 延迟 1.5 秒等蓝点跳回真实位置, 然后 moveTo 平滑过渡到真实位置
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-            guard let self = self,
-                  let mk = self.mapService.mapView as? MKMapView,
-                  let userLoc = mk.userLocation.location else { return }
-            self.mapService.moveTo(userLoc.coordinate)
-        }
+        // 4. 请求 GPS, 收到真实位置后 moveTo 平滑过渡到真实位置 (不等蓝点)
+        isRestoringRealLocation = true
+        realLocationManager.requestLocation()
     }
 }
 
