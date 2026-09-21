@@ -38,11 +38,17 @@ jobs:
 
       - name: Ad-hoc sign with entitlements (for TrollStore)
         run: |
-          # ad-hoc 签名把 LocationTool.entitlements 嵌入到 .app 内
-          # TrollStore 安装时会读取这些 entitlement，让 CLSimulationManager 私有 API 生效
-          codesign -f -s - --entitlements LocationTool/LocationTool.entitlements --generate-entitlement-der \
-            build/LocationTool.xcarchive/Products/Applications/LocationTool.app
-          codesign -d --entitlements - build/LocationTool.xcarchive/Products/Applications/LocationTool.app
+          # 安装 ldid (TrollStore 生态专用签名工具, 比 codesign 更适合注入平台级 entitlement)
+          # codesign 注入 platform-application / no-sandbox 等私有 entitlement 时不会真正生效,
+          # 必须用 ldid 才能让 TrollStore 识别这些权限, CLSimulationManager 才能真正改全局定位
+          brew install ldid
+          # 去掉 xcodebuild 留下的旧签名
+          codesign --remove build/LocationTool.xcarchive/Products/Applications/LocationTool.app || true
+          rm -rf build/LocationTool.xcarchive/Products/Applications/LocationTool.app/_CodeSignature || true
+          # ldid 注入完整 TrollStore 平台级 entitlement
+          ldid -SLocationTool/LocationTool.entitlements build/LocationTool.xcarchive/Products/Applications/LocationTool.app
+          # 校验
+          ldid -d build/LocationTool.xcarchive/Products/Applications/LocationTool.app
 
       - name: Package IPA
         run: |

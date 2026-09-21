@@ -2,9 +2,21 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>com.apple.developer.location.simulated</key>
+	<key>platform-application</key>
+	<true/>
+	<key>com.apple.private.security.no-sandbox</key>
+	<true/>
+	<key>com.apple.private.security.no-container</key>
+	<true/>
+	<key>com.apple.private.security.system-application</key>
+	<true/>
+	<key>com.apple.private.security.container-manager</key>
 	<true/>
 	<key>com.apple.locationd.simulation</key>
+	<true/>
+	<key>com.apple.developer.location.simulated</key>
+	<true/>
+	<key>com.apple.SystemConfiguration.SCDynamicStore-write-access</key>
 	<true/>
 </dict>
 </plist>
