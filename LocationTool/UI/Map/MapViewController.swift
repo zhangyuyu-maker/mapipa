@@ -22,7 +22,7 @@ final class MapViewController: UIViewController {
     private let searchBar = SearchBarView()
     private let locationCard = LocationCardView()
     private let routeCard = RouteCardView()
-    private let currentLocationButton = UIButton(type: .system)
+    private var userTrackingButton: UIView!
     private let searchResults = SearchResultsViewController()
     private var routeModeButton: UIBarButtonItem?
 
@@ -102,14 +102,14 @@ final class MapViewController: UIViewController {
         routeCard.isHidden = true
         view.addSubview(routeCard)
 
-        currentLocationButton.translatesAutoresizingMaskIntoConstraints = false
-        currentLocationButton.setImage(UIImage(systemName: "location.fill"), for: .normal)
-        currentLocationButton.backgroundColor = .systemBackground
-        currentLocationButton.layer.cornerRadius = 22
-        currentLocationButton.layer.shadowColor = UIColor.black.cgColor
-        currentLocationButton.layer.shadowOpacity = 0.2
-        currentLocationButton.layer.shadowRadius = 4
-        view.addSubview(currentLocationButton)
+        userTrackingButton = mapService.makeUserTrackingButton()
+        userTrackingButton.translatesAutoresizingMaskIntoConstraints = false
+        userTrackingButton.backgroundColor = .systemBackground
+        userTrackingButton.layer.cornerRadius = 22
+        userTrackingButton.layer.shadowColor = UIColor.black.cgColor
+        userTrackingButton.layer.shadowOpacity = 0.2
+        userTrackingButton.layer.shadowRadius = 4
+        view.addSubview(userTrackingButton)
 
         addChild(searchResults)
         searchResults.view.translatesAutoresizingMaskIntoConstraints = false
@@ -142,10 +142,10 @@ final class MapViewController: UIViewController {
             routeCard.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             routeCard.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
-            currentLocationButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-            currentLocationButton.bottomAnchor.constraint(equalTo: locationCard.topAnchor, constant: -16),
-            currentLocationButton.widthAnchor.constraint(equalToConstant: 44),
-            currentLocationButton.heightAnchor.constraint(equalToConstant: 44),
+            userTrackingButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            userTrackingButton.bottomAnchor.constraint(equalTo: locationCard.topAnchor, constant: -16),
+            userTrackingButton.widthAnchor.constraint(equalToConstant: 44),
+            userTrackingButton.heightAnchor.constraint(equalToConstant: 44),
 
             searchResults.view.topAnchor.constraint(equalTo: searchBar.bottomAnchor),
             searchResults.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -238,7 +238,6 @@ final class MapViewController: UIViewController {
             self?.routeManager.stop()
         }
 
-        currentLocationButton.addTarget(self, action: #selector(showCurrentLocation), for: .touchUpInside)
 
         backend.onStatusChange = { [weak self] status, _ in
             self?.locationCard.updateStatus(status)
@@ -286,9 +285,8 @@ final class MapViewController: UIViewController {
             present(locationFailAlert("系统定位服务未开启"), animated: true)
             return
         }
-        // 清空旧坐标，强制重新获取最新真实 GPS
+        // 清空旧坐标，强制重新获取最新真实 GPS（系统蓝点会自动显示）
         realLocation = nil
-        mapService.removeMarker()
         realLocationManager.requestLocation()
     }
 
@@ -571,6 +569,8 @@ final class MapViewController: UIViewController {
         let route = Route(points: routePoints, speedMetersPerSecond: 5.0, loop: false)
         simulationTarget = mockPoint ?? waypoints.last
         currentWaypointIndex = 0
+        // 隐藏系统蓝点，避免与模拟位置混淆
+        mapService.setShowsMyLocation(false)
         // 显示人物 Icon
         mapService.updatePersonIcon(at: startPoint.coordinate)
         // 绘制剩余路线：起点 → 途径点 → 目标
@@ -651,10 +651,10 @@ final class MapViewController: UIViewController {
         locationCard.update(point: nil)
         locationCard.updateWaypointCount(0)
         locationCard.setStartEnabled(false)
-        // 3. 清除地图人物 Icon 与剩余路线
+        // 3. 清除地图人物 Icon 与剩余路线，恢复系统蓝点显示
         mapService.removePersonIcon()
         mapService.clearRemainingRoute()
-        mapService.removeMarker()
+        mapService.setShowsMyLocation(true)
         // 4. 重新获取最新真实 GPS
         realLocation = nil
         guard CLLocationManager.locationServicesEnabled() else {
@@ -677,11 +677,10 @@ extension MapViewController: CLLocationManagerDelegate {
         realLocation = location
         // 模拟中：realLocation 只保存，绝不修改地图中心 / Marker / 人物 Icon
         if isSimulating { return }
-        // 非模拟：地图中心 = realLocation，Marker = realLocation
+        // 非模拟：地图中心 = realLocation（系统蓝点自动显示真实位置）
         mapService.showLocation(location.coordinate,
                                 latitudinalMeters: 500,
                                 longitudinalMeters: 500)
-        mapService.addMarker(at: location.coordinate, title: "我的位置", subtitle: nil)
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {

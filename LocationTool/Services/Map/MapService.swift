@@ -45,4 +45,10 @@ protocol MapService: AnyObject {
 
     /// 清除剩余路线
     func clearRemainingRoute()
+
+    /// 是否显示系统"我的位置"蓝点（非模拟时显示，模拟时隐藏避免与模拟位置混淆）
+    func setShowsMyLocation(_ flag: Bool)
+
+    /// 提供"我的位置"按钮（封装为 UIView，便于 VC 直接加入层级）
+    func makeUserTrackingButton() -> UIView
 }

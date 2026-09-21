@@ -18,7 +18,7 @@ final class AppleMapService: NSObject, MapService {
         let mv = MKMapView(frame: .zero)
         mv.showsCompass = true
         mv.showsScale = true
-        mv.showsUserLocation = false   // 不依赖系统蓝点，避免与模拟位置混淆
+        mv.showsUserLocation = true    // 非模拟时显示系统蓝点（与苹果地图一致）
         mv.isRotateEnabled = false
         mv.isPitchEnabled = false
         self.mkMapView = mv
@@ -132,6 +132,16 @@ final class AppleMapService: NSObject, MapService {
             mkMapView.removeOverlay(overlay)
             remainingRouteOverlay = nil
         }
+    }
+
+    func setShowsMyLocation(_ flag: Bool) {
+        mkMapView.showsUserLocation = flag
+    }
+
+    func makeUserTrackingButton() -> UIView {
+        let btn = MKUserTrackingButton(mapView: mkMapView)
+        btn.tintColor = .systemBlue
+        return btn
     }
 }
 
