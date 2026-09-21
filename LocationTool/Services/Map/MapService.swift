@@ -16,6 +16,9 @@ protocol MapService: AnyObject {
     /// 平滑移动到指定坐标（保持当前缩放级别）
     func moveTo(_ coordinate: CLLocationCoordinate2D)
 
+    /// 直接跳到指定坐标（无动画，保持当前缩放级别）
+    func setCenter(_ coordinate: CLLocationCoordinate2D)
+
     /// 添加/更新选中 Marker
     func addMarker(at coordinate: CLLocationCoordinate2D, title: String?, subtitle: String?)
 

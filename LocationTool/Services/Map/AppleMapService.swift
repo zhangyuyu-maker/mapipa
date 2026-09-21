@@ -58,6 +58,10 @@ final class AppleMapService: NSObject, MapService {
         mkMapView.setCenter(coordinate, animated: true)
     }
 
+    func setCenter(_ coordinate: CLLocationCoordinate2D) {
+        mkMapView.setCenter(coordinate, animated: false)
+    }
+
     func addMarker(at coordinate: CLLocationCoordinate2D,
                    title: String?,
                    subtitle: String?) {
