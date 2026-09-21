@@ -205,9 +205,39 @@ final class MapViewController: UIViewController {
             selectedPoint = nil
             mockPoint = nil
             mapService.removeMarker()
+            // 切回单点模式: 清空路线点
+            routePoints.removeAll()
+            mapService.clearRoute()
         } else {
             mapService.removeMarker()
+            // 切到路线模式: 第一个点 = 当前位置, 后续点击添加第二、第三个点
+            routePoints.removeAll()
+            mapService.clearRoute()
+            if let startCoord = currentLocationCoordinate() {
+                // 统一转 WGS-84 (mapView.userLocation 在中国大陆是 GCJ-02)
+                let wgs84Start = CoordTransform.gcj02ToWgs84(startCoord)
+                let start = RoutePoint(coordinate: wgs84Start, name: "起点")
+                routePoints.append(start)
+                redrawRouteOnMap()
+            }
+            updateRouteCardInfo()
         }
+    }
+
+    /// 获取当前位置坐标 (优先地图蓝点, 其次真实 GPS, 最后模拟位置)
+    /// 注意: 返回的坐标可能是 GCJ-02 (中国大陆地图), 使用方需自行转换
+    private func currentLocationCoordinate() -> CLLocationCoordinate2D? {
+        if let mk = mapService.mapView as? MKMapView,
+           let userLoc = mk.userLocation.location {
+            return userLoc.coordinate
+        }
+        if let real = realLocation {
+            return real.coordinate
+        }
+        if let sim = simulationLocation {
+            return sim.coordinate
+        }
+        return nil
     }
 
     // MARK: - 绑定交互
@@ -418,8 +448,11 @@ final class MapViewController: UIViewController {
     }
 
     private func handleRouteModeTap(_ coordinate: CLLocationCoordinate2D) {
+        // 第一个点 = 起点 (当前位置), 已在切换路线模式时添加
+        // 这里只处理后续点击: 添加第二、第三...个点
+        let wgs84Coord = CoordTransform.gcj02ToWgs84(coordinate)
         let index = routePoints.count
-        let point = RoutePoint(coordinate: coordinate,
+        let point = RoutePoint(coordinate: wgs84Coord,
                                name: "点\(index + 1)")
         routePoints.append(point)
         redrawRouteOnMap()
