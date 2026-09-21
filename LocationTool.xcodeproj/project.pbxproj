@@ -23,6 +23,7 @@
 		BB0000000000000000000017 /* RouteModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000017 /* RouteModels.swift */; };
 		BB0000000000000000000018 /* RouteManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000018 /* RouteManager.swift */; };
 		BB0000000000000000000019 /* RouteCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000019 /* RouteCardView.swift */; };
+		BB0000000000000000000020 /* CoordTransform.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000020 /* CoordTransform.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -45,6 +46,7 @@
 		AA0000000000000000000017 /* RouteModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteModels.swift; sourceTree = "<group>"; };
 		AA0000000000000000000018 /* RouteManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteManager.swift; sourceTree = "<group>"; };
 		AA0000000000000000000019 /* RouteCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteCardView.swift; sourceTree = "<group>"; };
+		AA0000000000000000000020 /* CoordTransform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoordTransform.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -115,6 +117,7 @@
 			children = (
 				AA0000000000000000000006 /* MapService.swift */,
 				AA0000000000000000000007 /* AppleMapService.swift */,
+				AA0000000000000000000020 /* CoordTransform.swift */,
 			);
 			path = Map;
 			sourceTree = "<group>";
@@ -264,6 +267,7 @@
 				BB0000000000000000000017 /* RouteModels.swift in Sources */,
 				BB0000000000000000000018 /* RouteManager.swift in Sources */,
 				BB0000000000000000000019 /* RouteCardView.swift in Sources */,
+			BB0000000000000000000020 /* CoordTransform.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
