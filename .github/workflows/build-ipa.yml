@@ -36,7 +36,15 @@ jobs:
             DEVELOPMENT_TEAM="" \
             PROVISIONING_PROFILE_SPECIFIER=""
 
-      - name: Package unsigned IPA
+      - name: Ad-hoc sign with entitlements (for TrollStore)
+        run: |
+          # ad-hoc 签名把 LocationTool.entitlements 嵌入到 .app 内
+          # TrollStore 安装时会读取这些 entitlement，让 CLSimulationManager 私有 API 生效
+          codesign -f -s - --entitlements LocationTool/LocationTool.entitlements --generate-entitlement-der \
+            build/LocationTool.xcarchive/Products/Applications/LocationTool.app
+          codesign -d --entitlements - build/LocationTool.xcarchive/Products/Applications/LocationTool.app
+
+      - name: Package IPA
         run: |
           mkdir -p Payload
           cp -r build/LocationTool.xcarchive/Products/Applications/LocationTool.app Payload/
