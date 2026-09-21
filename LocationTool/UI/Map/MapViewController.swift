@@ -671,7 +671,7 @@ final class MapViewController: UIViewController {
 
     // MARK: - 恢复真实位置
 
-    private func restoreRealLocation() {
+    @objc private func restoreRealLocation() {
         // 1. 停止当前模拟
         routeManager.stop()
         backend.stopSimulation()
