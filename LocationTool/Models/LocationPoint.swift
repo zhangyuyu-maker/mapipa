@@ -39,7 +39,7 @@ struct LocationPoint: Equatable, Codable {
 }
 
 /// 搜索结果项
-struct LocationSearchResult: Equatable {
+struct LocationSearchResult {
     let name: String
     let address: String?
     let coordinate: CLLocationCoordinate2D

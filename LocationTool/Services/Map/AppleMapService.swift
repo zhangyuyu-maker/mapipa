@@ -5,7 +5,8 @@ import UIKit
 /// 基于 MKMapView 的地图实现
 /// 封装地图渲染、缩放、拖动、Marker、路线绘制，以及点击识别
 final class AppleMapService: NSObject, MapService {
-    let mapView: MKMapView
+    private let mkMapView: MKMapView
+    var mapView: UIView { mkMapView }
     var onMapTapped: ((CLLocationCoordinate2D) -> Void)?
 
     private var selectionAnnotation: MKPointAnnotation?
@@ -18,7 +19,7 @@ final class AppleMapService: NSObject, MapService {
         mv.showsUserLocation = true
         mv.isRotateEnabled = false
         mv.isPitchEnabled = false
-        self.mapView = mv
+        self.mkMapView = mv
         super.init()
         mv.delegate = self
         setupTapGesture()
@@ -29,12 +30,12 @@ final class AppleMapService: NSObject, MapService {
     private func setupTapGesture() {
         let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
         tap.numberOfTapsRequired = 1
-        mapView.addGestureRecognizer(tap)
+        mkMapView.addGestureRecognizer(tap)
     }
 
     @objc private func handleTap(_ gesture: UITapGestureRecognizer) {
-        let point = gesture.location(in: mapView)
-        let coordinate = mapView.convert(point, toCoordinateFrom: mapView)
+        let point = gesture.location(in: mkMapView)
+        let coordinate = mkMapView.convert(point, toCoordinateFrom: mkMapView)
         onMapTapped?(coordinate)
     }
 
@@ -46,30 +47,30 @@ final class AppleMapService: NSObject, MapService {
         let region = MKCoordinateRegion(center: coordinate,
                                         latitudinalMeters: latitudinalMeters,
                                         longitudinalMeters: longitudinalMeters)
-        mapView.setRegion(region, animated: true)
+        mkMapView.setRegion(region, animated: true)
     }
 
     func moveTo(_ coordinate: CLLocationCoordinate2D) {
-        mapView.setCenter(coordinate, animated: true)
+        mkMapView.setCenter(coordinate, animated: true)
     }
 
     func addMarker(at coordinate: CLLocationCoordinate2D,
                    title: String?,
                    subtitle: String?) {
         if let existing = selectionAnnotation {
-            mapView.removeAnnotation(existing)
+            mkMapView.removeAnnotation(existing)
         }
         let annotation = MKPointAnnotation()
         annotation.coordinate = coordinate
         annotation.title = title
         annotation.subtitle = subtitle
         selectionAnnotation = annotation
-        mapView.addAnnotation(annotation)
+        mkMapView.addAnnotation(annotation)
     }
 
     func removeMarker() {
         if let existing = selectionAnnotation {
-            mapView.removeAnnotation(existing)
+            mkMapView.removeAnnotation(existing)
             selectionAnnotation = nil
         }
     }
@@ -79,15 +80,15 @@ final class AppleMapService: NSObject, MapService {
         guard points.count >= 2 else { return }
         let polyline = MKPolyline(coordinates: points, count: points.count)
         routeOverlay = polyline
-        mapView.addOverlay(polyline)
-        mapView.setVisibleMapRect(polyline.boundingMapRect,
+        mkMapView.addOverlay(polyline)
+        mkMapView.setVisibleMapRect(polyline.boundingMapRect,
                                   edgePadding: UIEdgeInsets(top: 60, left: 40, bottom: 60, right: 40),
                                   animated: true)
     }
 
     func clearRoute() {
         if let overlay = routeOverlay {
-            mapView.removeOverlay(overlay)
+            mkMapView.removeOverlay(overlay)
             routeOverlay = nil
         }
     }
