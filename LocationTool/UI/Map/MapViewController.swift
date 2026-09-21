@@ -689,13 +689,24 @@ final class MapViewController: UIViewController {
         mapService.removePersonIcon()
         mapService.clearRemainingRoute()
         mapService.setShowsMyLocation(true)
-        // 4. 重新获取最新真实 GPS (收到后 didUpdateLocations 会用 showLocation 平滑过渡到真实位置)
+        // 4. 设置跟随模式: 蓝点会自动从模拟位置跳回真实位置, 地图平滑跟随
+        // 用标志位跳过 didChange 的 200m 缩放, 避免缩到模拟位置
+        if let appleMap = mapService as? AppleMapService {
+            appleMap.shouldZoomToStreetOnFollow = false
+        }
+        if let mk = mapService.mapView as? MKMapView {
+            mk.setUserTrackingMode(.follow, animated: true)
+        }
+        // 5. 延迟 2 秒后恢复标志位并请求 GPS (等 locationd 完全停止模拟, 避免收到模拟位置)
         realLocation = nil
         guard CLLocationManager.locationServicesEnabled() else {
             present(locationFailAlert("系统定位服务未开启"), animated: true)
             return
         }
-        realLocationManager.requestLocation()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            (self?.mapService as? AppleMapService)?.shouldZoomToStreetOnFollow = true
+            self?.realLocationManager.requestLocation()
+        }
     }
 }
 

@@ -15,6 +15,9 @@ final class AppleMapService: NSObject, MapService {
     private var remainingRouteOverlay: MKOverlay?
     /// 是否已首次缩放到用户位置 (避免每次 userLocation 更新都缩放)
     private var hasZoomedToUserLocation = false
+    /// 是否在切换到 follow 模式时自动缩放到 200m 街道级别
+    /// 恢复真实位置时临时设为 false, 避免缩放到模拟位置
+    var shouldZoomToStreetOnFollow = true
 
     override init() {
         let mv = MKMapView(frame: .zero)
@@ -157,6 +160,8 @@ extension AppleMapService: MKMapViewDelegate {
                  animated: Bool) {
         switch mode {
         case .follow, .followWithHeading:
+            // 恢复真实位置时跳过 200m 缩放, 避免缩到模拟位置
+            guard shouldZoomToStreetOnFollow else { return }
             // 必须检查 userLocation.location != nil, 否则首次启动 GPS 还没来时
             // userLocation.coordinate 可能是 (0,0), 缩放过去会导致位置不在屏幕中心
             guard let userLoc = mapView.userLocation.location else { return }
