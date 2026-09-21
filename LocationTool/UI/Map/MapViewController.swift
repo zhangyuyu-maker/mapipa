@@ -691,16 +691,9 @@ final class MapViewController: UIViewController {
         mapService.removePersonIcon()
         mapService.clearRemainingRoute()
         mapService.setShowsMyLocation(true)
-        // 4. 延迟 2 秒后请求 GPS, 收到真实位置后用 moveTo 平滑过渡 (保持当前缩放级别)
+        // 4. 请求 GPS, 收到后用 moveTo 平滑过渡到真实位置
         isRestoringRealLocation = true
-        realLocation = nil
-        guard CLLocationManager.locationServicesEnabled() else {
-            present(locationFailAlert("系统定位服务未开启"), animated: true)
-            return
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
-            self?.realLocationManager.requestLocation()
-        }
+        realLocationManager.requestLocation()
     }
 }
 
