@@ -689,22 +689,18 @@ final class MapViewController: UIViewController {
         mapService.removePersonIcon()
         mapService.clearRemainingRoute()
         mapService.setShowsMyLocation(true)
-        // 4. 设置跟随模式: 蓝点会自动从模拟位置跳回真实位置, 地图平滑跟随
-        // 用标志位跳过 didChange 的 200m 缩放, 避免缩到模拟位置
-        if let appleMap = mapService as? AppleMapService {
-            appleMap.shouldZoomToStreetOnFollow = false
-        }
+        // 4. 设置跟随模式: 和点击三角按钮一样的过渡, didChange 会缩放到 userLocation 200m
+        // 蓝点会自动从模拟位置跳回真实位置, 地图跟随并缩放到 200m 街道级别
         if let mk = mapService.mapView as? MKMapView {
             mk.setUserTrackingMode(.follow, animated: true)
         }
-        // 5. 延迟 2 秒后恢复标志位并请求 GPS (等 locationd 完全停止模拟, 避免收到模拟位置)
+        // 5. 延迟 2 秒后请求 GPS (等 locationd 完全停止模拟, 避免收到模拟位置)
         realLocation = nil
         guard CLLocationManager.locationServicesEnabled() else {
             present(locationFailAlert("系统定位服务未开启"), animated: true)
             return
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
-            (self?.mapService as? AppleMapService)?.shouldZoomToStreetOnFollow = true
             self?.realLocationManager.requestLocation()
         }
     }
