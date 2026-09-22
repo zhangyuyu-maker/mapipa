@@ -81,6 +81,8 @@ struct RouteProgress {
     let totalSegments: Int
     /// 当前推进到的坐标（用于更新人物 Icon / 地图中心）
     let currentCoordinate: CLLocationCoordinate2D
+    /// 剩余道路坐标（从当前位置到终点，用于画剩余路线）
+    let remainingCoordinates: [CLLocationCoordinate2D]
     /// 进度比例 0..1
     var progress: Double {
         guard totalDistance > 0 else { return 0 }

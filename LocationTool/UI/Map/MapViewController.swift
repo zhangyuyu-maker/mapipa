@@ -326,6 +326,11 @@ final class MapViewController: UIViewController {
         routeManager.onProgress = { [weak self] progress in
             self?.onRouteProgress(progress)
         }
+        routeManager.onRoutePlanningFailed = { [weak self] in
+            let alert = UIAlertController(title: '路线规划失败', message: '请重新选择位置', preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: '确定', style: .default))
+            self?.present(alert, animated: true)
+        }
     }
 
     // MARK: - 真实位置（realLocation）
@@ -711,18 +716,14 @@ final class MapViewController: UIViewController {
         mapService.updatePersonIcon(at: gcjCoord)
         // 地图中心跟随 simulationLocation
         mapService.moveTo(gcjCoord)
-        // 重新计算剩余路线：当前点 → 剩余途径点
-        // 段索引 progress.segmentIndex 表示当前在 第 idx 到 第 idx+1 段
-        // 剩余点 = [idx+1, idx+2, ..., 末尾]
-        let routePoints = currentSingleRoutePoints
-        let remainingIdx = progress.segmentIndex + 1
-        if remainingIdx < routePoints.count {
-            // currentSingleRoutePoints 存的可能是 GCJ-02 或 WGS-84, 统一转 GCJ-02 显示
-            let remaining = Array(routePoints[remainingIdx...].map { CoordTransform.wgs84ToGcj02($0.coordinate) })
-            mapService.drawRemainingRoute(from: gcjCoord, points: remaining)
+        // 用道路坐标画剩余路线 (已走过的路线消失)
+        let remainingGCJ = progress.remainingCoordinates.map { CoordTransform.wgs84ToGcj02($0) }
+        if remainingGCJ.count >= 2 {
+            mapService.drawRemainingRoute(from: gcjCoord, points: Array(remainingGCJ[1...]))
         } else {
             mapService.clearRemainingRoute()
         }
+    }
         currentWaypointIndex = progress.segmentIndex
     }
 
