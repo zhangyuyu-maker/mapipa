@@ -24,6 +24,7 @@ final class MapViewController: UIViewController {
     private let routeCard = RouteCardView()
     private var userTrackingButton: UIView!
     private var restoreRealLocationButton: UIButton!
+    private var compassButton: UIView!
     private let searchResults = SearchResultsViewController()
     private var routeModeButton: UIBarButtonItem?
 
@@ -118,6 +119,15 @@ final class MapViewController: UIViewController {
         view.addSubview(userTrackingButton)
 
         // 恢复真实位置浮动按钮 (放在三角形按钮上方, 用 icon 显示)
+        compassButton = mapService.makeCompassButton()
+        compassButton.translatesAutoresizingMaskIntoConstraints = false
+        compassButton.backgroundColor = .systemBackground
+        compassButton.layer.cornerRadius = 22
+        compassButton.layer.shadowColor = UIColor.black.cgColor
+        compassButton.layer.shadowOpacity = 0.2
+        compassButton.layer.shadowRadius = 4
+        view.addSubview(compassButton)
+
         restoreRealLocationButton = UIButton(type: .system)
         restoreRealLocationButton.setImage(UIImage(systemName: "scope",
                                                   withConfiguration: UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)),
@@ -169,6 +179,11 @@ final class MapViewController: UIViewController {
             userTrackingButton.bottomAnchor.constraint(equalTo: locationCard.topAnchor, constant: -16),
             userTrackingButton.widthAnchor.constraint(equalToConstant: 44),
             userTrackingButton.heightAnchor.constraint(equalToConstant: 44),
+            compassButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            compassButton.bottomAnchor.constraint(equalTo: restoreRealLocationButton.topAnchor, constant: -12),
+            compassButton.widthAnchor.constraint(equalToConstant: 44),
+            compassButton.heightAnchor.constraint(equalToConstant: 44),
+
             restoreRealLocationButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
             restoreRealLocationButton.bottomAnchor.constraint(equalTo: userTrackingButton.topAnchor, constant: -12),
             restoreRealLocationButton.widthAnchor.constraint(equalToConstant: 44),

@@ -23,6 +23,7 @@ final class AppleMapService: NSObject, MapService {
         mv.showsUserLocation = true    // 非模拟时显示系统蓝点（与苹果地图一致）
         mv.isRotateEnabled = true
         mv.isPitchEnabled = false
+        mv.showsCompass = false
         self.mkMapView = mv
         super.init()
         mv.delegate = self
@@ -148,6 +149,12 @@ final class AppleMapService: NSObject, MapService {
         let btn = MKUserTrackingButton(mapView: mkMapView)
         btn.tintColor = .systemBlue
         return btn
+    }
+
+    func makeCompassButton() -> UIView {
+        let compass = MKCompassButton(mapView: mkMapView)
+        compass.compassVisibility = .adaptive
+        return compass
     }
 }
 

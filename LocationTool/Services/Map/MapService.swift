@@ -54,4 +54,7 @@ protocol MapService: AnyObject {
 
     /// 提供"我的位置"按钮（封装为 UIView，便于 VC 直接加入层级）
     func makeUserTrackingButton() -> UIView
+
+    /// 提供指南针按钮（点击恢复北朝上）
+    func makeCompassButton() -> UIView
 }
