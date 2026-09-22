@@ -327,8 +327,8 @@ final class MapViewController: UIViewController {
             self?.onRouteProgress(progress)
         }
         routeManager.onRoutePlanningFailed = { [weak self] in
-            let alert = UIAlertController(title: '路线规划失败', message: '请重新选择位置', preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: '确定', style: .default))
+            let alert = UIAlertController(title: "路线规划失败", message: "请重新选择位置", preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "确定", style: .default))
             self?.present(alert, animated: true)
         }
     }
