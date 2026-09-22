@@ -593,10 +593,12 @@ final class MapViewController: UIViewController {
         let route = Route(points: wgs84Points,
                          speedMetersPerSecond: routeCard.currentSpeed(),
                          loop: routeCard.currentLoop())
+        realLocationManager.startUpdatingLocation()
         routeManager.start(route: route, backend: backend)
     }
 
     private func clearRoute() {
+        realLocationManager.stopUpdatingLocation()
         routeManager.stop()
         routePoints.removeAll()
         mapService.clearRoute()
@@ -734,6 +736,7 @@ final class MapViewController: UIViewController {
 
     @objc private func restoreRealLocation() {
         // 1. 停止当前模拟
+        realLocationManager.stopUpdatingLocation()
         routeManager.stop()
         backend.stopSimulation()
         // 2. 清除模拟状态
