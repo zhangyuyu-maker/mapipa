@@ -141,7 +141,7 @@ final class MapViewController: UIViewController {
         restoreRealLocationButton.layer.shadowRadius = 4
         restoreRealLocationButton.addTarget(self, action: #selector(restoreRealLocation), for: .touchUpInside)
         // 默认隐藏, 仅模拟运行时显示
-        restoreRealLocationButton.isHidden = true
+        restoreRealLocationButton.isHidden = false
         view.addSubview(restoreRealLocationButton)
 
         addChild(searchResults)
@@ -310,7 +310,7 @@ final class MapViewController: UIViewController {
         backend.onStatusChange = { [weak self] status, _ in
             self?.locationCard.updateStatus(status)
             // 模拟运行时显示恢复按钮, 停止时隐藏
-            self?.restoreRealLocationButton.isHidden = (status != .running)
+            // 按钮一直显示, 不根据状态隐藏
             if status == .stopped {
                 self?.onSimulationEnded()
             }
@@ -318,7 +318,7 @@ final class MapViewController: UIViewController {
 
         routeManager.onStatusChange = { [weak self] status in
             self?.routeCard.updateStatus(status)
-            self?.restoreRealLocationButton.isHidden = (self?.backend.status != .running)
+            // 按钮一直显示, 不根据状态隐藏
             if status == .stopped {
                 self?.onSimulationEnded()
             }
@@ -739,7 +739,12 @@ final class MapViewController: UIViewController {
     @objc private func restoreRealLocation() {
         // 1. 停止当前模拟
         realLocationManager.stopUpdatingLocation()
+        realLocationManager.stopUpdatingLocation()
         routeManager.stop()
+        backend.stopSimulation()
+        routePoints.removeAll()
+        mapService.clearRemainingRoute()
+        mapService.removeMarker()
         backend.stopSimulation()
         // 2. 清除模拟状态
         simulationLocation = nil
