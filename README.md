@@ -1,81 +1,121 @@
-# LocationTool（定位工具）
+# LocationTool - iOS 定位模拟工具
 
-iOS 定位模拟工具，第一阶段：地图 + 地点搜索 + 选点 + 模拟定位。
+基于 TrollStore + CLSimulationManager 私有 API 的 iOS 全局定位模拟应用，支持地图选点、路线模拟、真实道路导航。
 
-## 技术栈
+## 核心功能
 
-- Swift 5 / UIKit（纯代码布局，无 Storyboard）
-- MapKit + MKLocalSearch + CLGeocoder（系统原生，无需 API Key）
-- iOS 16.0+ / TrollStore IPA
+### 1. 单点模拟
+- 长按地图任意位置 → 全局定位修改为该点
+- 蓝点自动移动到长按位置
+- 保持当前缩放级别（不自动放大）
+- GCJ-02 → WGS-84 坐标转换，确保长按位置与修改位置一致
 
-## 架构
+### 2. 路线模拟
+- 切换到路线模式自动以当前位置为起点
+- 点击地图添加后续点
+- 使用 MKDirections 规划真实道路路线（非直线插值）
+- 支持多途径点分段规划
+- 模拟位置沿道路坐标连续移动
+- 已走过的路线自动消失
+- 速度可调（1-30 m/s）
+- 循环/暂停/恢复/停止
+
+### 3. 地图功能
+- Apple Maps（MKMapView）
+- 搜索地点（MKLocalSearch）
+- 双指拖动/缩放/旋转
+- 指南针图标（MKCompassButton）
+- 三角形定位按钮（缩放到当前位置 200m）
+- 恢复真实位置按钮（一直显示）
+
+### 4. 后台运行
+- UIBackgroundModes: location
+- allowsBackgroundLocationUpdates = true
+- 模拟期间 startUpdatingLocation 保持 App 活跃
+- DispatchQueue.global().asyncAfter 驱动 Timer（不依赖 RunLoop）
+
+## 技术架构
 
 ```
-UI (MapViewController / SearchBarView / LocationCardView / SearchResultsViewController)
-        │
-        ▼
-MapService  ──►  AppleMapService (MKMapView)
-GeocodingService ──► AppleGeocodingService (MKLocalSearch + CLGeocoder)
-        │
-        ▼
-LocationPoint (模型)
-        │
-        ▼
-LocationBackend ──► SystemLocationBackend (CLLocationManager 私有 simulateLocation)
-        │
-        ▼
-   系统定位模拟
+UI 层
+├── MapViewController.swift       地图主控制器
+├── SearchBarView.swift            搜索栏
+├── SearchResultsViewController.swift 搜索结果
+├── LocationCardView.swift         单点模式控制面板
+└── RouteCardView.swift            路线模式控制面板
+
+Service 层
+├── Map/
+│   ├── MapService.swift           地图服务协议
+│   ├── AppleMapService.swift      Apple Maps 实现
+│   └── CoordTransform.swift       GCJ-02 ↔ WGS-84 转换
+├── Geocoding/
+│   ├── GeocodingService.swift     地理编码协议
+│   └── AppleGeocodingService.swift Apple 实现
+├── Location/
+│   └── LocationBackend.swift     CLSimulationManager 后端
+└── Route/
+    └── RouteManager.swift         路线推进管理器
+
+Model 层
+├── LocationPoint.swift            位置点模型
+└── RouteModels.swift              路线/进度模型
 ```
 
-地图层与定位后端完全解耦：地图只负责选点产出 `LocationPoint`，真正改系统定位由 `LocationBackend` 独立完成。后续更换地图 Provider 不影响定位核心。
+## 关键技术点
 
-## 第一阶段已实现功能
+### CLSimulationManager 全局定位修改
+- 私有 CoreLocation 类，需 com.apple.locationd.simulation entitlement
+- TrollStore 平台级 entitlement（platform-application / no-sandbox 等）
+- 调用顺序：stop → clear → append(location) → flush → start → postDarwinNotification
+- Darwin 通知 AutomaticTimeZoneUpdateNeeded 唤醒 locationd
 
-1. 地图显示 / 缩放 / 拖动（MKMapView）
-2. 点击地图选点 → 显示 Marker
-3. 底部卡片显示纬度、经度、地点名称
-4. 顶部搜索框 → MKLocalSearch 地点搜索
-5. 搜索结果列表 → 点击移动地图并放置 Marker
-6. 逆地理编码（CLGeocoder 补全地址）
-7. 设为模拟位置 → 开始模拟 / 停止模拟
-8. 当前真实位置按钮（CLLocationManager）
-9. 模拟状态指示（已停止 / 运行中）
+### MKMapView 空白瓦片修复
+TrollStore 平台级 entitlement 会导致 MKMapView 空白，必须添加：
+- com.apple.security.iokit-user-client-class（AGXDeviceUserClient / IOHDIXControllerUserClient / IOSurfaceRootUserClient）
+- com.apple.security.exception.files.absolute-path.read-write = ["/"]
 
-## 构建与运行
+### GCJ-02 / WGS-84 坐标转换
+- Apple Maps 中国大陆瓦片用 GCJ-02
+- mk.convert(touchPoint, toCoordinateFrom:) 返回 GCJ-02
+- CLSimulationManager / locationd 接收 WGS-84
+- 长按/路线点：GCJ-02 → WGS-84 传给后端
+- 显示蓝点/路线：WGS-84 → GCJ-02 传给地图
 
-### 方式一：GitHub Actions 云端构建（无需 Mac）
+### ldid 签名（TrollStore）
+codesign 无法注入 TrollStore 私有 entitlement，必须用 ldid：
+ldid -S<entitlements> <app>.app/<binary_name>
+签名 .app 内的 Mach-O 二进制，不是 .app 目录。
 
-适合没有 Mac 的用户，完全免费。
+## 构建
 
-1. 将本项目 push 到 GitHub 仓库（公开或私有均可）
-2. GitHub 会自动触发 Actions 构建（见 `.github/workflows/build-ipa.yml`）
-3. 构建完成后，在仓库页面点击 `Actions` 标签 → 选择最新的 `Build IPA` 运行
-4. 在运行详情页底部 `Artifacts` 区域下载 `LocationTool-ipa`（一个 zip，解压后得到 `LocationTool.ipa`）
-5. 将 `LocationTool.ipa` 拖入 TrollStore 安装
-6. 首次运行需要在「设置 → 通用 → VPN与设备管理」信任签名
+### GitHub Actions 自动构建
+- 仓库：https://github.com/zhangyuyu-maker/mapipa
+- 触发：push to master
+- Runner：macos-14 + Xcode 15.4
+- 流程：archive → ldid 签名 → 打包 IPA → 上传 artifact
 
-> 也可以在 `Actions` 页面手动点 `Run workflow` 触发构建。
+### 本地构建
+xcodebuild -project LocationTool.xcodeproj -scheme LocationTool -sdk iphoneos -configuration Release CODE_SIGNING_ALLOWED=NO
 
-### 方式二：Xcode（需要 Mac）
+## 安装
 
-1. 双击打开 `LocationTool.xcworkspace`
-2. 在 Xcode 中选择你的开发者团队（Signing & Capabilities）
-3. 连接 iOS 16+ 设备，选择目标设备
-4. `Cmd + R` 运行
-5. 打包 IPA：`Product -> Archive -> Distribute App -> Copy App`
+1. 从 GitHub Actions 下载 IPA
+2. 通过 TrollStore 安装
+3. 首次使用授予"始终允许"位置权限
 
-### 方式三：TrollStore 直接安装未签名 IPA
+## 系统要求
 
-1. 用上述任一方式获得 `.ipa` 文件
-2. 将 `.ipa` 拖入 TrollStore 安装
+- iOS 15+（TrollStore 兼容版本）
+- TrollStore 已安装
+- 已越狱或 TrollStore 环境
 
-> 定位模拟需要 `com.apple.developer.location.simulated` entitlement，已在 `LocationTool.entitlements` 中声明。TrollStore 的 fakesign 会保留该 entitlement，无需 Apple 开发者账号。
+## 依赖
 
-## 后续阶段（未实现）
+- 纯 Apple 框架（MapKit / CoreLocation / UIKit）
+- 无第三方 SDK
+- 无 CocoaPods / SPM 依赖
 
-- 路线模拟（RouteManager）：起点 → 途经点 → 终点、速度、暂停、循环
-- GPX 导入与轨迹模拟
-- 摇杆控制
-- 位置收藏夹（FavoriteLocationManager）
-- 系统级定位后端完善（TrollStore 注入）
+## License
 
+MIT
