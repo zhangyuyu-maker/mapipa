@@ -99,8 +99,12 @@ final class RouteManager {
         let ms = Int(tickInterval * 1000)
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + .milliseconds(ms)) { [weak self] in
             guard let self = self, self.isTimerRunning else { return }
-            self.tick()
-            self.scheduleNextTick()
+            // 切到主线程执行 tick, 避免与 stop/pause/updateSpeed 等主线程操作竞争
+            DispatchQueue.main.async {
+                guard self.isTimerRunning else { return }
+                self.tick()
+                self.scheduleNextTick()
+            }
         }
     }
 
@@ -122,10 +126,7 @@ final class RouteManager {
                 emitProgress(at: route.points.count - 2, coordinate: end.coordinate)
                 stopTimer()
                 status = .stopped
-                let s = status
-                DispatchQueue.main.async { [weak self] in
-                    self?.onStatusChange?(s)
-                }
+                onStatusChange?(status)
                 return
             }
         }
@@ -158,9 +159,7 @@ final class RouteManager {
                               segmentIndex: segmentIndex,
                               totalSegments: max(0, route.points.count - 1),
                               currentCoordinate: coordinate)
-        // tick 在 global queue 上触发, 回调需切回主线程更新 UI
-        DispatchQueue.main.async { [weak self] in
-            self?.onProgress?(p)
-        }
+        // tick 已在主线程执行, 直接回调
+        onProgress?(p)
     }
 }
