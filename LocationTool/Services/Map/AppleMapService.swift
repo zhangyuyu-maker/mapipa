@@ -21,7 +21,7 @@ final class AppleMapService: NSObject, MapService {
         mv.showsCompass = true
         mv.showsScale = true
         mv.showsUserLocation = true    // 非模拟时显示系统蓝点（与苹果地图一致）
-        mv.isRotateEnabled = false
+        mv.isRotateEnabled = true
         mv.isPitchEnabled = false
         self.mkMapView = mv
         super.init()
