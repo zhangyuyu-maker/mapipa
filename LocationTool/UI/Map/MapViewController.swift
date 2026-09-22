@@ -413,6 +413,7 @@ final class MapViewController: UIViewController {
         // 立即注入到系统层 (WGS-84), 蓝点会自动跳到长按位置
         // MKMapView 显示蓝点时会自动把 WGS-84 转回 GCJ-02, 所以蓝点正好落在用户长按位置
         // 不调用 mapService.showLocation -- 保留用户当前缩放级别
+        realLocationManager.startUpdatingLocation()
         backend.startSimulation(at: target)
     }
 
@@ -613,6 +614,7 @@ final class MapViewController: UIViewController {
         if isSimulating {
             // 停止模拟
             routeManager.stop()
+            realLocationManager.stopUpdatingLocation()
             backend.stopSimulation()
             return
         }
