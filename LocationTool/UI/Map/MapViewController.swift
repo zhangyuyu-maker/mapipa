@@ -751,12 +751,7 @@ final class MapViewController: UIViewController {
         mapService.clearRemainingRoute()
         mapService.setShowsMyLocation(true)
         // 4. 用缓存的真实位置直接跳到真实位置 (无动画, 模拟前保存的真实GPS)
-        if let real = realLocation {
-            mapService.setCenter(real.coordinate)
-        } else {
-            isRestoringRealLocation = true
-            realLocationManager.requestLocation()
-        }
+        // 4. 只恢复定位, 地图不动
     }
 }
 
@@ -772,7 +767,7 @@ extension MapViewController: CLLocationManagerDelegate {
         // 恢复真实位置: 直接跳到真实位置 (无动画)
         if isRestoringRealLocation {
             isRestoringRealLocation = false
-            mapService.setCenter(location.coordinate)
+            return  // 只恢复定位, 地图不动
             return
         }
         // 模拟中: locationd 返回的是模拟坐标, 不是真实GPS, 不更新 realLocation
