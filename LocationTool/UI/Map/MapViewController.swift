@@ -318,7 +318,7 @@ final class MapViewController: UIViewController {
 
         routeManager.onStatusChange = { [weak self] status in
             self?.routeCard.updateStatus(status)
-            self?.restoreRealLocationButton.isHidden = !(self?.backend.status == .running || status == .running)
+            self?.restoreRealLocationButton.isHidden = (self?.backend.status != .running)
             if status == .stopped {
                 self?.onSimulationEnded()
             }
