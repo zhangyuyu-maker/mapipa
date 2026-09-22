@@ -680,20 +680,24 @@ final class MapViewController: UIViewController {
 
     /// RouteManager 推进回调：更新 simulationLocation / 人物 Icon / 地图中心 / 剩余路线
     private func onRouteProgress(_ progress: RouteProgress) {
-        let coord = progress.currentCoordinate
-        simulationLocation = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
+        let wgsCoord = progress.currentCoordinate
+        // simulationLocation 存 WGS-84 (传给后端用)
+        simulationLocation = CLLocation(latitude: wgsCoord.latitude, longitude: wgsCoord.longitude)
+        // 地图显示用 GCJ-02 (Apple Maps 中国大陆瓦片是 GCJ-02)
+        let gcjCoord = CoordTransform.wgs84ToGcj02(wgsCoord)
         // 更新人物 Icon
-        mapService.updatePersonIcon(at: coord)
+        mapService.updatePersonIcon(at: gcjCoord)
         // 地图中心跟随 simulationLocation
-        mapService.moveTo(coord)
+        mapService.moveTo(gcjCoord)
         // 重新计算剩余路线：当前点 → 剩余途径点
         // 段索引 progress.segmentIndex 表示当前在 第 idx 到 第 idx+1 段
         // 剩余点 = [idx+1, idx+2, ..., 末尾]
         let routePoints = currentSingleRoutePoints
         let remainingIdx = progress.segmentIndex + 1
         if remainingIdx < routePoints.count {
-            let remaining = Array(routePoints[remainingIdx...].map { $0.coordinate })
-            mapService.drawRemainingRoute(from: coord, points: remaining)
+            // currentSingleRoutePoints 存的可能是 GCJ-02 或 WGS-84, 统一转 GCJ-02 显示
+            let remaining = Array(routePoints[remainingIdx...].map { CoordTransform.wgs84ToGcj02($0.coordinate) })
+            mapService.drawRemainingRoute(from: gcjCoord, points: remaining)
         } else {
             mapService.clearRemainingRoute()
         }
