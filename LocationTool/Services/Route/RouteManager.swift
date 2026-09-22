@@ -8,8 +8,9 @@ final class RouteManager {
     private var route: Route?
     private weak var backend: LocationBackend?
 
-    private var timer: Timer?
-    private let tickInterval: TimeInterval = 0.2
+    private var timer: DispatchSourceTimer?
+    private let tickInterval: TimeInterval = 0.5
+    private let queue = DispatchQueue.global(qos: .userInitiated)
 
     /// 累积距离数组：cumulative[i] 表示到第 i 个点的累计距离
     private var cumulative: [Double] = []
@@ -87,15 +88,19 @@ final class RouteManager {
 
     private func startTimer() {
         stopTimer()
-        let t = Timer(timeInterval: tickInterval, repeats: true) { [weak self] _ in
-            self?.tick()
+        let t = DispatchSource.makeTimerSource(queue: queue)
+        t.scheduleRepeating(deadline: .now() + tickInterval, repeating: tickInterval)
+        t.setEventHandler { [weak self] in
+            DispatchQueue.main.sync(execute: {
+                self?.tick()
+            })
         }
-        RunLoop.main.add(t, forMode: .common)
+        t.resume()
         timer = t
     }
 
     private func stopTimer() {
-        timer?.invalidate()
+        timer?.cancel()
         timer = nil
     }
 
