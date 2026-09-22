@@ -105,7 +105,7 @@ final class LocationHistoryService {
                 completion(.failure(error))
                 return
             }
-            completion?(.success(true))
+            completion(.success(true))
         }
         task.resume()
     }
