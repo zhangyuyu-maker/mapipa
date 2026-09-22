@@ -108,13 +108,14 @@ final class RouteManager {
                 }
                 // 提取 polyline 的所有道路坐标点
                 let count = route.polyline.pointCount
-                var coords = [CLLocationCoordinate2D](repeating: kCLLocationCoordinate2DInvalid,
+                var coords = [CLLocationCoordinate2D](repeating: CLLocationCoordinate2D(latitude: 0, longitude: 0),
                                                       count: count)
-                route.polyline.getCoordinates(&coords,
-                                              range: NSRange(location: 0, length: count))
+                coords.withUnsafeMutableBufferPointer { buf in
+                    route.polyline.getCoordinates(buf.baseAddress!, range: NSRange(location: 0, length: count))
+                }
                 // 拼接到完整路线 (跳过每段第一个点避免重复, 第一段保留)
                 let startIdx = (i == 0) ? 0 : 1
-                allCoords.append(contentsOf: coords[startIdx...])
+                allCoords.append(contentsOf: Array(coords[startIdx...]))
                 group.leave()
             }
         }
