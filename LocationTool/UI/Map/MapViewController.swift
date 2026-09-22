@@ -724,8 +724,6 @@ final class MapViewController: UIViewController {
             mapService.clearRemainingRoute()
         }
     }
-        currentWaypointIndex = progress.segmentIndex
-    }
 
     /// 模拟结束回调
     private func onSimulationEnded() {
