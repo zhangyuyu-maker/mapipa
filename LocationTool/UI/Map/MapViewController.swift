@@ -28,6 +28,7 @@ final class MapViewController: UIViewController {
     private let searchResults = SearchResultsViewController()
     private var routeModeButton: UIBarButtonItem?
     private let historyView = LocationHistoryView()
+    private var historyHeightConstraint: NSLayoutConstraint!
 
     // MARK: - 状态（真实位置 / 模拟位置 彻底分离）
     private var mode: MapMode = .single
@@ -203,9 +204,10 @@ final class MapViewController: UIViewController {
 
             historyView.topAnchor.constraint(equalTo: searchBar.bottomAnchor, constant: 8),
             historyView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
-            historyView.widthAnchor.constraint(equalToConstant: 160),
-            historyView.heightAnchor.constraint(equalToConstant: 310)
+            historyView.widthAnchor.constraint(equalToConstant: 130),
         ])
+        historyHeightConstraint = historyView.heightAnchor.constraint(equalToConstant: historyView.expandedHeight)
+        historyHeightConstraint.isActive = true
     }
 
     // MARK: - 模式切换
@@ -357,6 +359,13 @@ final class MapViewController: UIViewController {
         }
         historyView.onLongPress = { [weak self] item in
             self?.confirmDeleteHistory(item)
+        }
+        historyView.onToggle = { [weak self] expanded in
+            guard let self = self else { return }
+            self.historyHeightConstraint.constant = expanded ? self.historyView.expandedHeight : self.historyView.collapsedHeight
+            UIView.animate(withDuration: 0.25) {
+                self.view.layoutIfNeeded()
+            }
         }
     }
 
