@@ -787,7 +787,11 @@ extension MapViewController: CLLocationManagerDelegate {
         // 修改定位后重启 app, locationd 仍在用 CLSimulationManager 注入的模拟位置,
         // CLLocationManager.requestLocation() 拿不到真实位置会回调 didFailWithError,
         // 错误码为 kCLErrorUnknown (0) - 这不是真正的错误, 不应弹框打扰用户.
-        if let clError = error as? CLError, clError.code == .locationUnknown { return }
+        if let clError = error as? CLError, clError.code == .locationUnknown {
+            // locationd 仍在模拟模式, 显示恢复按钮
+            restoreRealLocationButton.isHidden = false
+            return
+        }
         if let clError = error as? CLError, clError.code == .denied { return }
         present(locationFailAlert(error.localizedDescription), animated: true)
     }

@@ -122,7 +122,10 @@ final class RouteManager {
                 emitProgress(at: route.points.count - 2, coordinate: end.coordinate)
                 stopTimer()
                 status = .stopped
-                onStatusChange?(status)
+                let s = status
+                DispatchQueue.main.async { [weak self] in
+                    self?.onStatusChange?(s)
+                }
                 return
             }
         }
@@ -155,6 +158,9 @@ final class RouteManager {
                               segmentIndex: segmentIndex,
                               totalSegments: max(0, route.points.count - 1),
                               currentCoordinate: coordinate)
-        onProgress?(p)
+        // tick 在 global queue 上触发, 回调需切回主线程更新 UI
+        DispatchQueue.main.async { [weak self] in
+            self?.onProgress?(p)
+        }
     }
 }
