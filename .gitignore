@@ -15,3 +15,6 @@ Package.resolved
 
 # macOS
 .DS_Store
+
+# Server data (历史定位运行时数据, 不提交)
+server/data/location-history.json

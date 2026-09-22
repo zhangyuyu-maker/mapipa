@@ -27,6 +27,7 @@ final class MapViewController: UIViewController {
     private var compassButton: UIView!
     private let searchResults = SearchResultsViewController()
     private var routeModeButton: UIBarButtonItem?
+    private let historyView = LocationHistoryView()
 
     // MARK: - 状态（真实位置 / 模拟位置 彻底分离）
     private var mode: MapMode = .single
@@ -90,6 +91,8 @@ final class MapViewController: UIViewController {
         // 默认显示一个区域，避免真实 GPS 还没回来时地图空白
         let defaultCoord = CLLocationCoordinate2D(latitude: 35.0, longitude: 105.0)
         mapService.showLocation(defaultCoord, latitudinalMeters: 2_000_000, longitudinalMeters: 2_000_000)
+        // 加载服务器历史定位记录
+        refreshHistoryList()
     }
 
     // MARK: - 布局
@@ -150,6 +153,10 @@ final class MapViewController: UIViewController {
         view.addSubview(searchResults.view)
         searchResults.didMove(toParent: self)
 
+        // 左侧历史定位列表
+        historyView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(historyView)
+
         let routeBtn = UIButton(type: .system)
         routeBtn.setImage(UIImage(systemName: "point.topleft.down.curvedto.point.bottomright.up"), for: .normal)
         routeBtn.addTarget(self, action: #selector(toggleMode), for: .touchUpInside)
@@ -192,7 +199,12 @@ final class MapViewController: UIViewController {
             searchResults.view.topAnchor.constraint(equalTo: searchBar.bottomAnchor),
             searchResults.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             searchResults.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            searchResults.view.bottomAnchor.constraint(equalTo: locationCard.topAnchor)
+            searchResults.view.bottomAnchor.constraint(equalTo: locationCard.topAnchor),
+
+            historyView.topAnchor.constraint(equalTo: searchBar.bottomAnchor, constant: 8),
+            historyView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
+            historyView.widthAnchor.constraint(equalToConstant: 160),
+            historyView.heightAnchor.constraint(equalToConstant: 310)
         ])
     }
 
@@ -338,6 +350,14 @@ final class MapViewController: UIViewController {
             alert.addAction(UIAlertAction(title: "确定", style: .default))
             self?.present(alert, animated: true)
         }
+
+        // 历史定位回调
+        historyView.onSelect = { [weak self] item in
+            self?.switchToLocationFromHistory(item)
+        }
+        historyView.onLongPress = { [weak self] item in
+            self?.confirmDeleteHistory(item)
+        }
     }
 
     // MARK: - 真实位置（realLocation）
@@ -428,6 +448,27 @@ final class MapViewController: UIViewController {
         // 不调用 mapService.showLocation -- 保留用户当前缩放级别
         realLocationManager.startUpdatingLocation()
         backend.startSimulation(at: target)
+        // 保存历史定位 (长按切换定位时才保存, 使用逆地理编码获取名称)
+        let gcj02Coord = coordinate
+        Task {
+            var historyName = "模拟位置"
+            do {
+                let address = try await geocoding.reverseGeocode(latitude: gcj02Coord.latitude,
+                                                                  longitude: gcj02Coord.longitude)
+                if let n = address.name, !n.isEmpty {
+                    historyName = n
+                } else if !address.fullAddress.isEmpty {
+                    historyName = address.fullAddress
+                }
+            } catch {
+                // 逆地理失败不影响保存, 使用默认名称
+            }
+            await MainActor.run {
+                self.saveHistory(name: historyName,
+                                 latitude: gcj02Coord.latitude,
+                                 longitude: gcj02Coord.longitude)
+            }
+        }
     }
 
     // MARK: - 地图点选
@@ -551,6 +592,10 @@ final class MapViewController: UIViewController {
         locationCard.update(point: point)
         locationCard.setStartEnabled(true)
         searchResults.view.isHidden = true
+        // 保存历史定位 (用户真正切换到搜索结果定位时才保存)
+        saveHistory(name: point.name ?? "搜索位置",
+                    latitude: coordinate.latitude,
+                    longitude: coordinate.longitude)
     }
 
     private func handleRouteSearchResult(_ result: LocationSearchResult) {
@@ -780,6 +825,90 @@ final class MapViewController: UIViewController {
         mapService.setShowsMyLocation(true)
         // 4. 用缓存的真实位置直接跳到真实位置 (无动画, 模拟前保存的真实GPS)
         // 4. 只恢复定位, 地图不动
+    }
+
+    // MARK: - 历史定位记录
+
+    /// 从服务器加载历史定位列表并刷新左侧列表
+    /// 网络错误不影响地图定位功能, 只提示加载失败
+    private func refreshHistoryList() {
+        LocationHistoryService.shared.fetchAll { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let items):
+                    self?.historyView.updateItems(items)
+                case .failure:
+                    self?.historyView.updateItems([])
+                    self?.showHistoryError("历史记录加载失败")
+                }
+            }
+        }
+    }
+
+    /// 保存历史定位到服务器并刷新列表
+    /// 服务器自动去重 (name+lat+lng 相同则更新 createdAt)
+    /// 保存失败不影响地图定位功能
+    private func saveHistory(name: String, latitude: Double, longitude: Double) {
+        LocationHistoryService.shared.save(name: name,
+                                           latitude: latitude,
+                                           longitude: longitude) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success:
+                    self?.refreshHistoryList()
+                case .failure:
+                    self?.showHistoryError("历史记录保存失败")
+                }
+            }
+        }
+    }
+
+    /// 点击历史记录: 切换到该定位 (复用现有定位方法, 不新增历史记录)
+    private func switchToLocationFromHistory(_ item: LocationHistoryItem) {
+        let gcj02Coord = item.coordinate
+        // 复用 handleLongPress 的核心逻辑: GCJ-02 -> WGS-84 -> backend.startSimulation
+        let wgs84Coord = CoordTransform.gcj02ToWgs84(gcj02Coord)
+        let target = LocationPoint(coordinate: wgs84Coord, name: item.name)
+        mockPoint = target
+        simulationTarget = target
+        simulationLocation = CLLocation(latitude: wgs84Coord.latitude, longitude: wgs84Coord.longitude)
+        // 移动地图中心到历史定位
+        mapService.showLocation(gcj02Coord, latitudinalMeters: 1000, longitudinalMeters: 1000)
+        mapService.addMarker(at: gcj02Coord, title: item.name, subtitle: nil)
+        // 启动模拟 (复用 backend.startSimulation)
+        realLocationManager.startUpdatingLocation()
+        backend.startSimulation(at: target)
+        // 隐藏搜索结果, 避免遮挡
+        searchResults.view.isHidden = true
+        // 注意: 点击历史记录只切换定位, 不新增历史记录
+    }
+
+    /// 长按历史记录: 弹出删除确认弹窗
+    private func confirmDeleteHistory(_ item: LocationHistoryItem) {
+        let alert = UIAlertController(title: "删除历史定位？",
+                                     message: item.name,
+                                     preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "删除", style: .destructive, handler: { [weak self] _ in
+            LocationHistoryService.shared.delete(id: item.id) { result in
+                DispatchQueue.main.async {
+                    switch result {
+                    case .success:
+                        self?.refreshHistoryList()
+                    case .failure:
+                        self?.showHistoryError("历史记录删除失败")
+                    }
+                }
+            }
+        }))
+        present(alert, animated: true)
+    }
+
+    /// 显示历史记录相关错误提示 (不影响地图定位和模拟功能)
+    private func showHistoryError(_ message: String) {
+        let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "好", style: .default))
+        present(alert, animated: true)
     }
 }
 
