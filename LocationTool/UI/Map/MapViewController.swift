@@ -768,7 +768,7 @@ extension MapViewController: CLLocationManagerDelegate {
         if isRestoringRealLocation {
             isRestoringRealLocation = false
             return  // 只恢复定位, 地图不动
-            return
+
         }
         // 模拟中: locationd 返回的是模拟坐标, 不是真实GPS, 不更新 realLocation
         if isSimulating { return }
