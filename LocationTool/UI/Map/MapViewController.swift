@@ -214,9 +214,8 @@ final class MapViewController: UIViewController {
             routePoints.removeAll()
             mapService.clearRoute()
             if let startCoord = currentLocationCoordinate() {
-                // 统一转 WGS-84 (mapView.userLocation 在中国大陆是 GCJ-02)
-                let wgs84Start = CoordTransform.gcj02ToWgs84(startCoord)
-                let start = RoutePoint(coordinate: wgs84Start, name: "起点")
+                // routePoints 存 GCJ-02 (地图显示用), startRoute 时再转 WGS-84
+                let start = RoutePoint(coordinate: startCoord, name: "起点")
                 routePoints.append(start)
                 redrawRouteOnMap()
             }
@@ -450,9 +449,9 @@ final class MapViewController: UIViewController {
     private func handleRouteModeTap(_ coordinate: CLLocationCoordinate2D) {
         // 第一个点 = 起点 (当前位置), 已在切换路线模式时添加
         // 这里只处理后续点击: 添加第二、第三...个点
-        let wgs84Coord = CoordTransform.gcj02ToWgs84(coordinate)
+        // routePoints 存 GCJ-02 (地图显示用), startRoute 时再转 WGS-84 传给后端
         let index = routePoints.count
-        let point = RoutePoint(coordinate: wgs84Coord,
+        let point = RoutePoint(coordinate: coordinate,
                                name: "点\(index + 1)")
         routePoints.append(point)
         redrawRouteOnMap()
@@ -568,7 +567,12 @@ final class MapViewController: UIViewController {
             return
         }
         routeCard.resetProgress()
-        let route = Route(points: routePoints,
+        // routePoints 是 GCJ-02 (地图显示用), 传给后端需转 WGS-84 (locationd 用 WGS-84)
+        let wgs84Points = routePoints.map { rp -> RoutePoint in
+            let wgs = CoordTransform.gcj02ToWgs84(rp.coordinate)
+            return RoutePoint(coordinate: wgs, name: rp.name)
+        }
+        let route = Route(points: wgs84Points,
                          speedMetersPerSecond: routeCard.currentSpeed(),
                          loop: routeCard.currentLoop())
         routeManager.start(route: route, backend: backend)
