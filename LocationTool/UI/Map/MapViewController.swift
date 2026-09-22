@@ -225,31 +225,38 @@ final class MapViewController: UIViewController {
             mapService.clearRoute()
         } else {
             mapService.removeMarker()
-            // 切到路线模式: 第一个点 = 当前位置, 后续点击添加第二、第三个点
+            // 切到路线模式: 第一个点 = 我的位置, 用户点击从第二个点开始
             routePoints.removeAll()
             mapService.clearRoute()
-            if let startCoord = currentLocationCoordinate() {
-                // routePoints 存 GCJ-02 (地图显示用), startRoute 时再转 WGS-84
-                let start = RoutePoint(coordinate: startCoord, name: "起点")
-                routePoints.append(start)
-                redrawRouteOnMap()
-            }
+            refreshMyLocationAsFirstPoint()
             updateRouteCardInfo()
         }
     }
 
-    /// 获取当前位置坐标 (优先地图蓝点, 其次真实 GPS, 最后模拟位置)
-    /// 注意: 返回的坐标可能是 GCJ-02 (中国大陆地图), 使用方需自行转换
-    private func currentLocationCoordinate() -> CLLocationCoordinate2D? {
-        if let mk = mapService.mapView as? MKMapView,
-           let userLoc = mk.userLocation.location {
-            return userLoc.coordinate
+    /// 刷新路线模式第一个点为当前位置 (WGS-84 → GCJ-02)
+    /// 保留用户手动添加的途径点 (routePoints[1..])
+    /// 规则: routePoints[0] = 我的位置, 永远跟随最新真实 GPS
+    private func refreshMyLocationAsFirstPoint() {
+        guard let wgsCoord = currentLocationWgs84() else { return }
+        // routePoints 存 GCJ-02 (地图显示 + MKPlacemark 路线规划都用 GCJ-02)
+        let gcj02 = CoordTransform.wgs84ToGcj02(wgsCoord)
+        let myPoint = RoutePoint(coordinate: gcj02, name: "我的位置")
+        if routePoints.isEmpty {
+            routePoints = [myPoint]
+        } else {
+            routePoints[0] = myPoint
+        }
+        redrawRouteOnMap()
+    }
+
+    /// 获取当前位置 WGS-84 坐标 (优先 simulationLocation, 其次真实 GPS)
+    /// CLLocation 始终是 WGS-84
+    private func currentLocationWgs84() -> CLLocationCoordinate2D? {
+        if let sim = simulationLocation {
+            return sim.coordinate
         }
         if let real = realLocation {
             return real.coordinate
-        }
-        if let sim = simulationLocation {
-            return sim.coordinate
         }
         return nil
     }
@@ -412,7 +419,8 @@ final class MapViewController: UIViewController {
         // 不弹功能框、不加红色 marker、不加人物 icon —— 蓝点本身就是当前位置
         let wgs84Coord = CoordTransform.gcj02ToWgs84(coordinate)
         let target = LocationPoint(coordinate: wgs84Coord, name: "模拟位置")
-        mockPoint = target
+        // mockPoint GCJ-02
+        mockPoint = LocationPoint(coordinate: coordinate, name: "模拟位置")
         simulationTarget = target
         simulationLocation = CLLocation(latitude: wgs84Coord.latitude, longitude: wgs84Coord.longitude)
         // 立即注入到系统层 (WGS-84), 蓝点会自动跳到长按位置
@@ -471,9 +479,12 @@ final class MapViewController: UIViewController {
     }
 
     private func handleRouteModeTap(_ coordinate: CLLocationCoordinate2D) {
-        // 第一个点 = 起点 (当前位置), 已在切换路线模式时添加
-        // 这里只处理后续点击: 添加第二、第三...个点
-        // routePoints 存 GCJ-02 (地图显示用), startRoute 时再转 WGS-84 传给后端
+        // 确保第一个点 = 我的位置
+        if routePoints.isEmpty {
+            refreshMyLocationAsFirstPoint()
+        }
+        // 第一个点 = 我的位置
+        // routePoints 存 GCJ-02
         let index = routePoints.count
         let point = RoutePoint(coordinate: coordinate,
                                name: "点\(index + 1)")
@@ -543,6 +554,10 @@ final class MapViewController: UIViewController {
     }
 
     private func handleRouteSearchResult(_ result: LocationSearchResult) {
+        // 确保第一个点 = 我的位置
+        if routePoints.isEmpty {
+            refreshMyLocationAsFirstPoint()
+        }
         let index = routePoints.count
         let point = RoutePoint(coordinate: result.coordinate,
                                name: result.point.name ?? "点\(index + 1)")
@@ -590,13 +605,12 @@ final class MapViewController: UIViewController {
             present(alert, animated: true)
             return
         }
+        // 刷新第一个点为最新位置 (确保起点 = 当前真实位置)
+        refreshMyLocationAsFirstPoint()
         routeCard.resetProgress()
-        // routePoints 是 GCJ-02 (地图显示用), 传给后端需转 WGS-84 (locationd 用 WGS-84)
-        let wgs84Points = routePoints.map { rp -> RoutePoint in
-            let wgs = CoordTransform.gcj02ToWgs84(rp.coordinate)
-            return RoutePoint(coordinate: wgs, name: rp.name)
-        }
-        let route = Route(points: wgs84Points,
+        // routePoints 是 GCJ-02, 直接传给 RouteManager
+        // RouteManager 内部用 GCJ-02 做 MKPlacemark 路线规划, 转 WGS-84 给 backend
+        let route = Route(points: routePoints,
                          speedMetersPerSecond: routeCard.currentSpeed(),
                          loop: routeCard.currentLoop())
         realLocationManager.startUpdatingLocation()
@@ -606,7 +620,9 @@ final class MapViewController: UIViewController {
     private func clearRoute() {
         realLocationManager.stopUpdatingLocation()
         routeManager.stop()
+        // 清空用户添加的途径点, 保留第一个点
         routePoints.removeAll()
+        refreshMyLocationAsFirstPoint()
         mapService.clearRoute()
         mapService.removeMarker()
         routeCard.resetProgress()
@@ -632,9 +648,13 @@ final class MapViewController: UIViewController {
         // - 首次模拟：从真实 GPS 位置开始
         let startPoint: LocationPoint
         if let sim = simulationLocation {
-            startPoint = LocationPoint(coordinate: sim.coordinate, name: "当前模拟位置")
+            // simulationLocation 是 WGS-84, 转 GCJ-02
+            let gcj = CoordTransform.wgs84ToGcj02(sim.coordinate)
+            startPoint = LocationPoint(coordinate: gcj, name: "当前模拟位置")
         } else if let real = realLocation {
-            startPoint = LocationPoint(coordinate: real.coordinate, name: "起点")
+            // realLocation 是 WGS-84, 转 GCJ-02
+            let gcj = CoordTransform.wgs84ToGcj02(real.coordinate)
+            startPoint = LocationPoint(coordinate: gcj, name: "起点")
             simulationLocation = real
         } else {
             // 没有真实位置，提示先获取
@@ -686,7 +706,9 @@ final class MapViewController: UIViewController {
     private func restartSingleSimulationWithNewTarget(_ newTarget: LocationPoint) {
         // 当前 simulationLocation 作为新起点
         guard let sim = simulationLocation else { return }
-        let startPoint = LocationPoint(coordinate: sim.coordinate, name: "当前模拟位置")
+        // simulationLocation 是 WGS-84, 转 GCJ-02
+        let gcjStart = CoordTransform.wgs84ToGcj02(sim.coordinate)
+        let startPoint = LocationPoint(coordinate: gcjStart, name: "当前模拟位置")
         var newRoutePoints: [RoutePoint] = [RoutePoint(coordinate: startPoint.coordinate, name: "起点")]
         // 保留未到达的途径点
         let remainingWaypoints = Array(waypoints.dropFirst(currentWaypointIndex))
@@ -707,17 +729,16 @@ final class MapViewController: UIViewController {
 
     /// RouteManager 推进回调：更新 simulationLocation / 人物 Icon / 地图中心 / 剩余路线
     private func onRouteProgress(_ progress: RouteProgress) {
-        let wgsCoord = progress.currentCoordinate
-        // simulationLocation 存 WGS-84 (传给后端用)
-        simulationLocation = CLLocation(latitude: wgsCoord.latitude, longitude: wgsCoord.longitude)
+        // RouteManager 传来的是 GCJ-02 (来自 roadPath, 即 MKPolyline 道路坐标)
+        let gcjCoord = progress.currentCoordinate
+        // simulationLocation 存 WGS-84 (供 currentLocationWgs84() 和后续 backend 使用)
+        let wgs84 = CoordTransform.gcj02ToWgs84(gcjCoord)
+        simulationLocation = CLLocation(latitude: wgs84.latitude, longitude: wgs84.longitude)
         // 地图显示用 GCJ-02 (Apple Maps 中国大陆瓦片是 GCJ-02)
-        let gcjCoord = CoordTransform.wgs84ToGcj02(wgsCoord)
-        // 更新人物 Icon
         mapService.updatePersonIcon(at: gcjCoord)
-        // 地图中心跟随 simulationLocation
         mapService.moveTo(gcjCoord)
-        // 用道路坐标画剩余路线 (已走过的路线消失)
-        let remainingGCJ = progress.remainingCoordinates.map { CoordTransform.wgs84ToGcj02($0) }
+        // remainingCoordinates 也是 GCJ-02, 直接用
+        let remainingGCJ = progress.remainingCoordinates
         if remainingGCJ.count >= 2 {
             mapService.drawRemainingRoute(from: gcjCoord, points: Array(remainingGCJ[1...]))
         } else {
@@ -738,13 +759,11 @@ final class MapViewController: UIViewController {
     @objc private func restoreRealLocation() {
         // 1. 停止当前模拟
         realLocationManager.stopUpdatingLocation()
-        realLocationManager.stopUpdatingLocation()
         routeManager.stop()
         backend.stopSimulation()
         routePoints.removeAll()
         mapService.clearRemainingRoute()
         mapService.removeMarker()
-        backend.stopSimulation()
         // 2. 清除模拟状态
         simulationLocation = nil
         simulationTarget = nil
@@ -782,6 +801,10 @@ extension MapViewController: CLLocationManagerDelegate {
         // 模拟中: locationd 返回的是模拟坐标, 不是真实GPS, 不更新 realLocation
         if isSimulating { return }
         realLocation = location
+        // 路线模式且未开始模拟: 第一个点跟随最新真实 GPS
+        if mode == .route && !routePoints.isEmpty {
+            refreshMyLocationAsFirstPoint()
+        }
         // 非模拟：地图中心 = realLocation（系统蓝点自动显示真实位置）
         mapService.showLocation(location.coordinate,
                                 latitudinalMeters: 500,

@@ -62,9 +62,12 @@ final class RouteManager {
             self.elapsedDistance = 0
 
             // 立即下发起点
+            // roadPath 是 GCJ-02 (来自 MKPolyline), 传给 backend 需转 WGS-84 (locationd 用 WGS-84)
             let startCoord = coords[0]
-            backend.startSimulation(at: LocationPoint(latitude: startCoord.latitude,
-                                                      longitude: startCoord.longitude))
+            let wgs84Start = CoordTransform.gcj02ToWgs84(startCoord)
+            backend.startSimulation(at: LocationPoint(latitude: wgs84Start.latitude,
+                                                      longitude: wgs84Start.longitude))
+            // emitProgress 用 GCJ-02 (供地图显示)
             self.emitProgress(at: 0, coordinate: startCoord)
             self.startTimer()
         }
@@ -202,8 +205,11 @@ final class RouteManager {
                 // 到达终点
                 elapsedDistance = roadTotalDistance
                 let end = roadPath.last!
-                backend?.startSimulation(at: LocationPoint(latitude: end.latitude,
-                                                           longitude: end.longitude))
+                // roadPath 是 GCJ-02 (来自 MKPolyline), 传给 backend 需转 WGS-84
+                let wgs84End = CoordTransform.gcj02ToWgs84(end)
+                backend?.startSimulation(at: LocationPoint(latitude: wgs84End.latitude,
+                                                           longitude: wgs84End.longitude))
+                // emitProgress 用 GCJ-02 (供地图显示)
                 emitProgress(at: roadPath.count - 2, coordinate: end)
                 stopTimer()
                 status = .stopped
@@ -217,7 +223,7 @@ final class RouteManager {
         while idx < roadCumulative.count - 2 && elapsedDistance >= roadCumulative[idx + 1] {
             idx += 1
         }
-        // 在段内插值
+        // 在相邻道路 polyline 点之间插值 (不是起点到终点的直线)
         let segStart = roadCumulative[idx]
         let segEnd = roadCumulative[idx + 1]
         let segLen = segEnd - segStart
@@ -227,7 +233,11 @@ final class RouteManager {
         let lat = p0.latitude + (p1.latitude - p0.latitude) * t
         let lon = p0.longitude + (p1.longitude - p0.longitude) * t
         let coord = CLLocationCoordinate2D(latitude: lat, longitude: lon)
-        backend?.startSimulation(at: LocationPoint(latitude: lat, longitude: lon))
+        // roadPath 是 GCJ-02, 传给 backend 需转 WGS-84
+        let wgs84 = CoordTransform.gcj02ToWgs84(coord)
+        backend?.startSimulation(at: LocationPoint(latitude: wgs84.latitude,
+                                                   longitude: wgs84.longitude))
+        // emitProgress 用 GCJ-02 (供地图显示)
         emitProgress(at: idx, coordinate: coord)
     }
 
