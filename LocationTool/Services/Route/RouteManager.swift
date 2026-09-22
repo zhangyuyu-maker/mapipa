@@ -165,6 +165,66 @@ final class RouteManager {
         route = r
     }
 
+    // MARK: - 运行中追加途径点
+
+    /// 在路线模拟运行中追加新途径点
+    /// 从前一个点 -> 新点用 MKDirections 规划真实道路路线
+    /// 追加到 roadPath 后面, tick 循环走完原路线后自动接入新路段
+    /// 坐标系: from/to 均为 GCJ-02, roadPath 也存 GCJ-02
+    /// - 到达终点后追加: 重新启动 timer 继续走向新点
+    /// - 暂停时追加: 不自动恢复, 等用户手动 resume
+    func appendWaypoint(from: RoutePoint, to: RoutePoint) {
+        guard !roadPath.isEmpty else {
+            onRoutePlanningFailed?()
+            return
+        }
+        let source = MKMapItem(placemark: MKPlacemark(coordinate: from.coordinate))
+        let destination = MKMapItem(placemark: MKPlacemark(coordinate: to.coordinate))
+        let request = MKDirections.Request()
+        request.source = source
+        request.destination = destination
+        request.transportType = .automobile
+
+        let directions = MKDirections(request: request)
+        directions.calculate { [weak self] response, error in
+            guard let self = self else { return }
+            if error != nil {
+                self.onRoutePlanningFailed?()
+                return
+            }
+            guard let route = response?.routes.first else {
+                self.onRoutePlanningFailed?()
+                return
+            }
+            // 提取 polyline 的所有道路坐标点
+            let count = route.polyline.pointCount
+            var coords = [CLLocationCoordinate2D](repeating: CLLocationCoordinate2D(latitude: 0, longitude: 0),
+                                                  count: count)
+            coords.withUnsafeMutableBufferPointer { buf in
+                route.polyline.getCoordinates(buf.baseAddress!, range: NSRange(location: 0, length: count))
+            }
+            // 跳过第一个点 (roadPath.last 已是该点), 追加剩余坐标
+            guard coords.count >= 2 else { return }
+            let newCoords = Array(coords[1...])
+            for i in 0..<newCoords.count {
+                let prevCoord = (i == 0) ? self.roadPath.last! : newCoords[i - 1]
+                let a = CLLocation(latitude: prevCoord.latitude, longitude: prevCoord.longitude)
+                let b = CLLocation(latitude: newCoords[i].latitude, longitude: newCoords[i].longitude)
+                let dist = a.distance(from: b)
+                self.roadCumulative.append(self.roadCumulative.last! + dist)
+                self.roadPath.append(newCoords[i])
+            }
+            self.roadTotalDistance = self.roadCumulative.last ?? self.roadTotalDistance
+
+            // 如果 timer 已停止且不是暂停状态 (即到达终点后), 重新启动
+            if !self.isTimerRunning && self.status != .paused {
+                self.status = .running
+                self.onStatusChange?(self.status)
+                self.startTimer()
+            }
+        }
+    }
+
     // MARK: - Timer
 
     private func startTimer() {

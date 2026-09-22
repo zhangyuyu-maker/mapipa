@@ -539,7 +539,15 @@ final class MapViewController: UIViewController {
         let point = RoutePoint(coordinate: coordinate,
                                name: "点\(index + 1)")
         routePoints.append(point)
-        redrawRouteOnMap()
+
+        if isSimulating && routePoints.count >= 2 {
+            // 移动中增加点: 从上一个点 -> 新点规划道路路线, 追加到 roadPath
+            // 不调用 redrawRouteOnMap (避免直线干扰), onRouteProgress 会自动显示剩余路线
+            let prevPoint = routePoints[routePoints.count - 2]
+            routeManager.appendWaypoint(from: prevPoint, to: point)
+        } else {
+            redrawRouteOnMap()
+        }
         updateRouteCardInfo()
     }
 
