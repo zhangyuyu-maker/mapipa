@@ -91,9 +91,7 @@ final class RouteManager {
         let t = DispatchSource.makeTimerSource(queue: queue)
         t.scheduleRepeating(deadline: .now() + tickInterval, repeating: tickInterval)
         t.setEventHandler { [weak self] in
-            DispatchQueue.main.sync(execute: {
-                self?.tick()
-            })
+            self?.tick()
         }
         t.resume()
         timer = t
@@ -155,6 +153,9 @@ final class RouteManager {
                               segmentIndex: segmentIndex,
                               totalSegments: max(0, route.points.count - 1),
                               currentCoordinate: coordinate)
-        onProgress?(p)
+        // DispatchSourceTimer 在 global queue 上触发, 回调需切回主线程更新 UI
+        DispatchQueue.main.async { [weak self] in
+            self?.onProgress?(p)
+        }
     }
 }
