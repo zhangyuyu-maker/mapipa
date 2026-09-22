@@ -57,5 +57,11 @@
 	<string>需要获取当前位置用于地图显示与模拟起点</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>需要位置权限以在模拟时保持定位更新</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>需要后台位置权限以在路线模拟时持续推进</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
 </dict>
 </plist>

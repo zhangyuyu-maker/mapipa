@@ -321,7 +321,10 @@ final class MapViewController: UIViewController {
         realLocationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
         realLocationManager.pausesLocationUpdatesAutomatically = false
         realLocationManager.distanceFilter = kCLDistanceFilterNone
-        realLocationManager.requestWhenInUseAuthorization()
+        // 后台持续定位: 路线模拟时 App 移到后台也能继续推进
+        realLocationManager.allowsBackgroundLocationUpdates = true
+        // 请求 Always 授权 (后台定位需要)
+        realLocationManager.requestAlwaysAuthorization()
         // 已授权则立即请求一次位置（避免已授权用户启动时地图空白无蓝点）
         if realLocationManager.authorizationStatus == .authorizedWhenInUse
             || realLocationManager.authorizationStatus == .authorizedAlways {
