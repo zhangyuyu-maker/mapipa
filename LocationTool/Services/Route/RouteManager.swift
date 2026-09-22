@@ -89,7 +89,8 @@ final class RouteManager {
     private func startTimer() {
         stopTimer()
         let t = DispatchSource.makeTimerSource(queue: queue)
-        t.scheduleRepeating(deadline: .now() + tickInterval, repeating: tickInterval)
+                let intervalMs = Int(tickInterval * 1000)
+        t.scheduleRepeating(deadline: .now() + .milliseconds(intervalMs), repeating: .milliseconds(intervalMs))
         t.setEventHandler { [weak self] in
             self?.tick()
         }
